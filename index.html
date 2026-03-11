@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>王程的个人博客</title>
+    <title>技术博客</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -62,6 +62,18 @@
         .post-excerpt {
             color: #555;
         }
+        nav {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        nav a {
+            margin: 0 15px;
+            text-decoration: none;
+            color: #2980b9;
+        }
+        nav a:hover {
+            text-decoration: underline;
+        }
         footer {
             text-align: center;
             margin-top: 30px;
@@ -72,14 +84,26 @@
 </head>
 <body>
     <header>
-        <h1>王程的个人博客</h1>
+        <h1>技术博客</h1>
         <p class="subtitle">分享技术、思考与生活</p>
     </header>
+    
+    <nav>
+        <a href="index.html">首页</a>
+        <a href="about.html">关于</a>
+        <a href="llm-quantization.html">大语言模型量化方案前沿进展</a>
+    </nav>
     
     <main class="posts">
         <div class="post">
             <div class="post-date">2026年3月11日</div>
-            <a href="#" class="post-title">欢迎来到我的博客！</a>
+            <a href="llm-quantization.html" class="post-title">大语言模型量化方案前沿进展</a>
+            <p class="post-excerpt">随着大语言模型(LLM)规模的不断增长，模型部署和推理成本成为实际应用中的主要瓶颈。量化技术作为模型压缩的重要手段，近年来取得了显著进展。</p>
+        </div>
+        
+        <div class="post">
+            <div class="post-date">2026年3月11日</div>
+            <a href="blog.html" class="post-title">欢迎来到我的博客！</a>
             <p class="post-excerpt">这是我的第一个博客文章。在这里，我将分享关于人工智能、编程、技术趋势以及个人思考的内容。</p>
         </div>
         
@@ -97,7 +121,7 @@
     </main>
     
     <footer>
-        <p>© 2026 王程. 本站使用 GitHub Pages 托管.</p>
+        <p>© 2026 技术博客. 本站使用 GitHub Pages 托管.</p>
     </footer>
 </body>
 </html>
