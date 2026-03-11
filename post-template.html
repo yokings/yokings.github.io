@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大语言模型量化方案前沿进展 - 技术博客</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>技术博客</h1>
+            <p>探索人工智能与前沿技术</p>
+        </header>
+        
+        <main class="content">
+            <article class="post-detail">
+                <h1>大语言模型量化方案前沿进展</h1>
+                <div class="post-meta">
+                    <span class="date">2026年3月11日</span>
+                    <span class="reading-time">阅读时间: 5分钟</span>
+                </div>
+                
+                <div class="post-content">
+                    <p>随着大语言模型(LLM)规模的不断增长，模型部署和推理成本成为实际应用中的主要瓶颈。量化技术作为模型压缩的重要手段，近年来取得了显著进展。本文将介绍当前最新的大语言模型量化方案。</p>
+
+                    <h2>1. 量化基础概念</h2>
+                    <p>量化是将高精度数值（如FP32、FP16）转换为低精度数值（如INT8、INT4）的过程。通过减少每个参数的存储空间和计算复杂度，量化可以显著降低模型的内存占用和计算需求。</p>
+
+                    <h2>2. 主流量化方案</h2>
+                    
+                    <h3>2.1 AWQ (Activation-aware Weight Quantization)</h3>
+                    <p>AWQ是一种激活感知的权重量化方法，通过分析激活值的分布来确定权重的重要性，从而在量化过程中保护重要权重。该方法在INT4量化下仍能保持较好的模型性能。</p>
+
+                    <h3>2.2 GPTQ (GPT Quantization)</h3>
+                    <p>GPTQ采用逐层优化的方式，在量化每一层时最小化输出误差。这种方法特别适用于自回归语言模型，能够在极低比特率下保持生成质量。</p>
+
+                    <h3>2.3 SmoothQuant</h3>
+                    <p>SmoothQuant通过平滑激活值的分布，使得权重和激活都能进行更有效的量化。该方法实现了INT8精度下的无损量化，大大降低了推理延迟。</p>
+
+                    <h3>2.4 SpQR (Sparse-Quantized Representation)</h3>
+                    <p>SpQR结合了稀疏性和量化的优势，通过识别并保留重要权重，同时对剩余权重进行量化。这种方法在保持模型性能的同时实现了更高的压缩率。</p>
+
+                    <h2>3. 最新研究趋势</h2>
+                    
+                    <h3>3.1 混合精度量化</h3>
+                    <p>不同层或不同权重采用不同的量化精度，根据其对模型性能的贡献程度进行动态调整。</p>
+
+                    <h3>3.2 训练感知量化</h3>
+                    <p>在模型训练阶段就考虑量化的影响，通过量化感知训练(QAT)来提高量化后的模型性能。</p>
+
+                    <h3>3.3 硬件友好量化</h3>
+                    <p>针对特定硬件架构优化量化方案，充分利用硬件的计算特性，如NVIDIA的TensorRT-LLM、Intel的GGML等。</p>
+
+                    <h2>4. 实际应用建议</h2>
+                    <p>对于大多数应用场景，推荐从INT8量化开始，如果性能满足要求且有进一步压缩需求，再尝试INT4量化。同时，建议使用成熟的量化框架如AutoGPTQ、llama.cpp等，它们已经集成了多种优化技术。</p>
+
+                    <h2>5. 未来展望</h2>
+                    <p>随着硬件技术的发展和算法的创新，大语言模型量化将继续朝着更高效率、更低精度损失的方向发展。未来的量化方案可能会更加智能化，能够自动适应不同的模型架构和应用场景。</p>
+
+                    <p>量化技术正在让大语言模型变得更加实用和普及，为AI技术的广泛应用铺平道路。</p>
+                </div>
+            </article>
+            
+            <div class="back-to-home">
+                <a href="index.html" class="github-link">← 返回首页</a>
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <p>&copy; 2026 技术博客. 保留所有权利.</p>
+            <a href="https://github.com/yokings/yokings.github.io" class="github-link">View on GitHub</a>
+        </footer>
+    </div>
+</body>
+</html>
