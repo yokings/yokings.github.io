@@ -1,0 +1,2574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 深度解析：从原理到实践 | yokings</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0a0a0f;
+            --bg-secondary: #111118;
+            --text: #e4e4e7;
+            --text-secondary: #a1a1aa;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --border: #27272a;
+            --green: #22c55e;
+            --orange: #f59e0b;
+            --red: #ef4444;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Animated gradient background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .bg-gradient::before {
+            content: '';
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            top: -25%;
+            left: -25%;
+            background: radial-gradient(circle at 20% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.12) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 50%);
+            animation: gradientMove 20s ease-in-out infinite;
+        }
+
+        @keyframes gradientMove {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(30px, -30px) rotate(120deg); }
+            66% { transform: translate(-20px, 20px) rotate(240deg); }
+        }
+
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+            -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 18px 0;
+            background: rgba(10, 10, 15, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.3s;
+        }
+
+        nav.scrolled {
+            border-bottom-color: var(--border);
+        }
+
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text);
+            text-decoration: none;
+            background: linear-gradient(135deg, var(--accent-light), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            white-space: nowrap;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 22px;
+            list-style: none;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent-light);
+        }
+
+        .back-home {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .back-home:hover {
+            color: var(--accent-light);
+            border-color: var(--accent);
+        }
+
+        /* Hero */
+        .hero {
+            padding: 130px 0 50px;
+            text-align: center;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--accent-light);
+            margin-bottom: 22px;
+        }
+
+        .hero-badge .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+        }
+
+        .hero h1 {
+            font-size: clamp(2.2rem, 6vw, 3.8rem);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 18px;
+            letter-spacing: -0.02em;
+        }
+
+        .hero h1 .gradient-text {
+            background: linear-gradient(135deg, #fff 0%, var(--accent-light) 50%, #c4b5fd 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 640px;
+            margin: 0 auto 32px;
+        }
+
+        /* Connection visualization */
+        .conn-viz {
+            margin: 40px auto 0;
+            max-width: 680px;
+            padding: 28px 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .conn-viz-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            position: relative;
+        }
+
+        .conn-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+            z-index: 2;
+        }
+
+        .conn-node .node-box {
+            width: 76px;
+            height: 76px;
+            border-radius: 14px;
+            background: rgba(99, 102, 241, 0.08);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            box-shadow: 0 0 24px var(--accent-glow);
+        }
+
+        .conn-node .node-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .conn-line {
+            flex: 1;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-light), var(--accent));
+            background-size: 200% 100%;
+            border-radius: 2px;
+            position: relative;
+            animation: lineFlow 3s linear infinite;
+        }
+
+        @keyframes lineFlow {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .packet {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-light);
+            box-shadow: 0 0 12px var(--accent-light);
+        }
+
+        .packet.right {
+            animation: packetRight 2.4s ease-in-out infinite;
+        }
+
+        .packet.left {
+            background: var(--green);
+            box-shadow: 0 0 12px var(--green);
+            animation: packetLeft 2.4s ease-in-out infinite;
+            animation-delay: 1.2s;
+        }
+
+        @keyframes packetRight {
+            0% { left: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { left: calc(100% - 14px); opacity: 0; }
+        }
+
+        @keyframes packetLeft {
+            0% { left: calc(100% - 14px); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { left: 0; opacity: 0; }
+        }
+
+        .conn-status {
+            text-align: center;
+            margin-top: 18px;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+        }
+
+        .conn-status .ok { color: var(--green); }
+
+        /* Sections */
+        section {
+            padding: 56px 0;
+            scroll-margin-top: 80px;
+        }
+
+        .section-header {
+            margin-bottom: 32px;
+        }
+
+        .section-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--accent-light);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+
+        .section-title {
+            font-size: clamp(1.6rem, 3.5vw, 2.1rem);
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            margin-bottom: 10px;
+        }
+
+        .section-desc {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            max-width: 680px;
+        }
+
+        /* Cards */
+        .card-grid {
+            display: grid;
+            gap: 18px;
+            margin-top: 8px;
+        }
+
+        .card-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .card-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 22px;
+            transition: all 0.3s;
+        }
+
+        .card.hoverable:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent);
+            box-shadow: 0 16px 36px rgba(0,0,0,0.35);
+        }
+
+        .card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card p {
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            line-height: 1.65;
+        }
+
+        .card .emoji {
+            font-size: 1.4rem;
+        }
+
+        /* Analogy */
+        .analogy-card .analogy-icon {
+            font-size: 1.8rem;
+            margin-bottom: 6px;
+        }
+
+        .analogy-card .analogy-tag {
+            display: inline-block;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 9px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .analogy-tag.http { background: rgba(245, 158, 11, 0.15); color: var(--orange); }
+        .analogy-tag.ws { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+
+        /* Comparison diagram */
+        .compare-diagram {
+            margin-top: 24px;
+            padding: 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+        }
+
+        .compare-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 0;
+        }
+
+        .compare-row + .compare-row {
+            border-top: 1px solid var(--border);
+        }
+
+        .compare-label {
+            width: 100px;
+            flex-shrink: 0;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .compare-flow {
+            flex: 1;
+            position: relative;
+            height: 44px;
+            overflow: hidden;
+        }
+
+        .flow-node {
+            position: absolute;
+            top: 8px;
+            padding: 4px 10px;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            font-size: 0.78rem;
+            color: var(--accent-light);
+            white-space: nowrap;
+        }
+
+        .flow-node.client { left: 0; }
+        .flow-node.server { right: 0; }
+
+        .flow-packet {
+            position: absolute;
+            top: 16px;
+            font-size: 0.72rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        /* HTTP half-duplex animation: multiple one-way trips */
+        .http-req {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--orange);
+            animation: httpReq 4s linear infinite;
+        }
+
+        .http-res {
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--accent-light);
+            animation: httpRes 4s linear infinite;
+            animation-delay: 2s;
+        }
+
+        @keyframes httpReq {
+            0% { left: 60px; opacity: 0; }
+            10% { opacity: 1; }
+            45% { left: calc(100% - 110px); opacity: 1; }
+            50% { left: calc(100% - 110px); opacity: 0; }
+            100% { left: calc(100% - 110px); opacity: 0; }
+        }
+
+        @keyframes httpRes {
+            0% { left: calc(100% - 110px); opacity: 0; }
+            10% { opacity: 1; }
+            45% { left: 60px; opacity: 1; }
+            50% { left: 60px; opacity: 0; }
+            100% { left: 60px; opacity: 0; }
+        }
+
+        /* WebSocket full-duplex: continuous two-way */
+        .ws-req {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--green);
+            animation: wsReq 2s linear infinite;
+        }
+
+        .ws-res {
+            background: rgba(139, 92, 246, 0.2);
+            color: #c4b5fd;
+            animation: wsRes 2s linear infinite;
+        }
+
+        @keyframes wsReq {
+            0% { left: 60px; opacity: 0; }
+            15% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { left: calc(100% - 110px); opacity: 0; }
+        }
+
+        @keyframes wsRes {
+            0% { left: calc(100% - 110px); opacity: 0; }
+            15% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { left: 60px; opacity: 0; }
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 22px;
+            border-radius: 10px;
+            font-size: 0.92rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            color: white;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px var(--accent-glow);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--red);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-danger:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: #0d0d14;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 18px;
+            font-family: 'SF Mono', Monaco, Consolas, 'Courier New', monospace;
+            font-size: 0.84rem;
+            line-height: 1.7;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .code-block .ln {
+            color: #52525b;
+            margin-right: 14px;
+            user-select: none;
+            display: inline-block;
+            width: 24px;
+            text-align: right;
+        }
+
+        .tok-key { color: #c084fc; }
+        .tok-str { color: #86efac; }
+        .tok-num { color: #fbbf24; }
+        .tok-com { color: #6b7280; font-style: italic; }
+        .tok-fn { color: #60a5fa; }
+        .tok-bool { color: #fb923c; }
+        .tok-attr { color: #f472b6; }
+
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .copy-btn:hover {
+            color: var(--accent-light);
+            border-color: var(--accent);
+        }
+
+        /* Handshake demo */
+        .handshake-stage {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px;
+            margin-top: 16px;
+        }
+
+        .handshake-flow {
+            display: flex;
+            align-items: stretch;
+            gap: 16px;
+            margin-bottom: 18px;
+            min-height: 260px;
+        }
+
+        .hs-node {
+            flex: 0 0 120px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px;
+            background: rgba(99, 102, 241, 0.06);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .hs-node .hs-icon { font-size: 2rem; }
+        .hs-node .hs-name { font-size: 0.85rem; font-weight: 600; }
+        .hs-node .hs-sub { font-size: 0.72rem; color: var(--text-secondary); }
+
+        .hs-channel {
+            flex: 1;
+            position: relative;
+            min-width: 0;
+        }
+
+        .hs-msg {
+            position: absolute;
+            left: 0;
+            right: 0;
+            padding: 8px 12px;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            font-size: 0.78rem;
+            opacity: 0;
+            transform: translateY(0);
+            transition: opacity 0.4s;
+        }
+
+        .hs-msg.show { opacity: 1; }
+        .hs-msg.right { top: 10px; }
+        .hs-msg.left { bottom: 10px; border-color: var(--green); background: rgba(34, 197, 94, 0.1); }
+
+        .hs-msg .arrow { font-weight: 700; margin-right: 6px; }
+        .hs-msg.right .arrow { color: var(--accent-light); }
+        .hs-msg.left .arrow { color: var(--green); }
+
+        .hs-step {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.02);
+            border-left: 3px solid var(--accent);
+            border-radius: 4px;
+            margin-bottom: 10px;
+            opacity: 0.4;
+            transition: all 0.3s;
+        }
+
+        .hs-step.active {
+            opacity: 1;
+            border-left-color: var(--green);
+            background: rgba(34, 197, 94, 0.06);
+        }
+
+        .hs-step .step-num {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            line-height: 22px;
+            text-align: center;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            font-size: 0.72rem;
+            margin-right: 8px;
+            font-weight: 700;
+        }
+
+        .hs-step.active .step-num { background: var(--green); }
+
+        /* Comparison table */
+        .cmp-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .cmp-tab {
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .cmp-tab.active {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--accent);
+            color: var(--accent-light);
+        }
+
+        .cmp-table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg-secondary);
+        }
+
+        .cmp-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 560px;
+        }
+
+        .cmp-table th, .cmp-table td {
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 0.86rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .cmp-table th {
+            background: rgba(99, 102, 241, 0.08);
+            color: var(--accent-light);
+            font-weight: 600;
+            font-size: 0.82rem;
+            position: sticky;
+            top: 0;
+        }
+
+        .cmp-table th:first-child, .cmp-table td:first-child {
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .cmp-table tr:last-child td { border-bottom: none; }
+
+        .cmp-table .good { color: var(--green); }
+        .cmp-table .bad { color: var(--red); }
+        .cmp-table .neutral { color: var(--orange); }
+
+        .cmp-table td.highlight {
+            background: rgba(99, 102, 241, 0.1);
+            box-shadow: inset 3px 0 0 var(--accent);
+        }
+
+        /* Echo demo */
+        .echo-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 22px;
+            margin-top: 8px;
+        }
+
+        .echo-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 10px;
+            margin-bottom: 16px;
+            font-size: 0.88rem;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+            transition: all 0.3s;
+        }
+
+        .status-dot.connecting {
+            background: var(--orange);
+            animation: pulse-orange 1s ease-in-out infinite;
+        }
+
+        .status-dot.connected {
+            background: var(--green);
+            box-shadow: 0 0 12px var(--green);
+        }
+
+        .status-dot.disconnected {
+            background: var(--red);
+        }
+
+        @keyframes pulse-orange {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .echo-log {
+            background: #0d0d14;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            height: 260px;
+            overflow-y: auto;
+            margin-bottom: 16px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+        }
+
+        .echo-log::-webkit-scrollbar { width: 6px; }
+        .echo-log::-webkit-scrollbar-track { background: transparent; }
+        .echo-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .log-entry {
+            padding: 6px 10px;
+            margin-bottom: 6px;
+            border-radius: 6px;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-entry.sent {
+            background: rgba(99, 102, 241, 0.08);
+            border-left: 3px solid var(--accent);
+        }
+
+        .log-entry.received {
+            background: rgba(34, 197, 94, 0.08);
+            border-left: 3px solid var(--green);
+        }
+
+        .log-entry.info {
+            background: rgba(245, 158, 11, 0.06);
+            border-left: 3px solid var(--orange);
+            color: var(--orange);
+        }
+
+        .log-entry.error {
+            background: rgba(239, 68, 68, 0.08);
+            border-left: 3px solid var(--red);
+            color: var(--red);
+        }
+
+        .log-time {
+            color: var(--text-secondary);
+            flex-shrink: 0;
+            font-size: 0.74rem;
+            padding-top: 1px;
+        }
+
+        .log-arrow {
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .log-entry.sent .log-arrow { color: var(--accent-light); }
+        .log-entry.received .log-arrow { color: var(--green); }
+
+        .echo-input-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .echo-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 11px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 0.9rem;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .echo-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .echo-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Frame visualizer */
+        .frame-builder {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 22px;
+            margin-top: 8px;
+        }
+
+        .frame-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .frame-control {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .frame-control label {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .frame-control select,
+        .frame-control input[type="text"] {
+            padding: 8px 10px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 0.85rem;
+            font-family: inherit;
+        }
+
+        .frame-control select:focus,
+        .frame-control input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .toggle-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toggle-switch input { display: none; }
+
+        .toggle-track {
+            width: 42px;
+            height: 22px;
+            background: var(--border);
+            border-radius: 11px;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .toggle-track::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: var(--text);
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .toggle-switch input:checked + .toggle-track {
+            background: var(--accent);
+        }
+
+        .toggle-switch input:checked + .toggle-track::after {
+            transform: translateX(20px);
+        }
+
+        .frame-visual {
+            background: #0d0d14;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            overflow-x: auto;
+            margin-bottom: 18px;
+        }
+
+        .frame-bits {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 0.8rem;
+            min-width: 540px;
+        }
+
+        .bit-group {
+            border-radius: 6px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .bit-group .bits {
+            display: flex;
+            gap: 2px;
+        }
+
+        .bit-group .bit {
+            width: 16px;
+            height: 22px;
+            line-height: 22px;
+            text-align: center;
+            background: rgba(255,255,255,0.05);
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        .bit-group .bit.on {
+            background: var(--accent);
+            color: white;
+        }
+
+        .bit-group .label {
+            font-size: 0.68rem;
+            color: var(--text-secondary);
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .bit-group.fin { background: rgba(99, 102, 241, 0.12); }
+        .bit-group.rsv { background: rgba(245, 158, 11, 0.1); }
+        .bit-group.opcode { background: rgba(34, 197, 94, 0.12); }
+        .bit-group.mask { background: rgba(239, 68, 68, 0.12); }
+        .bit-group.len { background: rgba(139, 92, 246, 0.12); }
+
+        .frame-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 14px;
+            font-size: 0.76rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .frame-hex {
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 0.8rem;
+            color: var(--green);
+            background: #0d0d14;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            word-break: break-all;
+            line-height: 1.8;
+        }
+
+        .frame-info {
+            margin-top: 12px;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+
+        .frame-info code {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--accent-light);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+        }
+
+        /* Heartbeat diagram */
+        .heartbeat-stage {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px;
+            margin-top: 8px;
+        }
+
+        .hb-flow {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+            min-height: 120px;
+        }
+
+        .hb-node {
+            flex: 0 0 90px;
+            text-align: center;
+            padding: 14px 8px;
+            background: rgba(99, 102, 241, 0.06);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .hb-node.dropped {
+            border-color: var(--red);
+            background: rgba(239, 68, 68, 0.08);
+            animation: redFlash 0.6s ease;
+        }
+
+        @keyframes redFlash {
+            0%, 100% { background: rgba(239, 68, 68, 0.08); }
+            50% { background: rgba(239, 68, 68, 0.3); }
+        }
+
+        .hb-node .hb-icon { font-size: 1.6rem; }
+        .hb-node .hb-name { font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px; }
+
+        .hb-channel {
+            flex: 1;
+            position: relative;
+            height: 80px;
+        }
+
+        .hb-ping {
+            position: absolute;
+            top: 18px;
+            left: 0;
+            font-size: 0.72rem;
+            padding: 3px 9px;
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--accent-light);
+            border-radius: 5px;
+            font-weight: 600;
+            opacity: 0;
+        }
+
+        .hb-pong {
+            position: absolute;
+            bottom: 18px;
+            right: 0;
+            font-size: 0.72rem;
+            padding: 3px 9px;
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--green);
+            border-radius: 5px;
+            font-weight: 600;
+            opacity: 0;
+        }
+
+        .hb-ping.fly { animation: hbFlyRight 1.4s ease forwards; }
+        .hb-pong.fly { animation: hbFlyLeft 1.4s ease forwards; animation-delay: 0.7s; }
+
+        @keyframes hbFlyRight {
+            0% { left: 0; opacity: 0; }
+            15% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { left: calc(100% - 60px); opacity: 0; }
+        }
+
+        @keyframes hbFlyLeft {
+            0% { right: 0; opacity: 0; }
+            15% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { right: calc(100% - 60px); opacity: 0; }
+        }
+
+        .hb-status {
+            text-align: center;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            padding: 10px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px;
+            margin-bottom: 14px;
+            min-height: 38px;
+        }
+
+        .hb-status .countdown { color: var(--orange); font-weight: 600; }
+        .hb-status .reconnecting { color: var(--red); }
+        .hb-status .connected { color: var(--green); }
+
+        /* Code tabs */
+        .code-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .code-tab {
+            padding: 10px 18px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+
+        .code-tab:hover { color: var(--text); }
+
+        .code-tab.active {
+            color: var(--accent-light);
+            border-bottom-color: var(--accent);
+        }
+
+        .code-panel { display: none; }
+        .code-panel.active { display: block; }
+
+        /* Security cards */
+        .security-card {
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+        }
+
+        .security-icon {
+            font-size: 1.8rem;
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(99, 102, 241, 0.08);
+            border-radius: 10px;
+        }
+
+        .security-card h3 {
+            font-size: 1.02rem;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .security-card p {
+            font-size: 0.86rem;
+        }
+
+        /* Links list */
+        .links-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .link-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 18px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s;
+        }
+
+        .link-item:hover {
+            border-color: var(--accent);
+            transform: translateX(4px);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .link-info h4 {
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+
+        .link-info p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .link-arrow {
+            color: var(--accent-light);
+            flex-shrink: 0;
+        }
+
+        /* Footer */
+        footer {
+            padding: 40px 0;
+            border-top: 1px solid var(--border);
+            margin-top: 60px;
+        }
+
+        footer .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        footer p {
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+        }
+
+        footer .footer-links {
+            display: flex;
+            gap: 20px;
+        }
+
+        footer .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.88rem;
+            transition: color 0.2s;
+        }
+
+        footer .footer-links a:hover {
+            color: var(--accent-light);
+        }
+
+        /* Scroll reveal */
+        .reveal {
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Inline code */
+        code.inline {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--accent-light);
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 0.86em;
+        }
+
+        /* Responsive */
+        @media (max-width: 760px) {
+            .card-grid.cols-2,
+            .card-grid.cols-3 {
+                grid-template-columns: 1fr;
+            }
+
+            .handshake-flow {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .hs-node {
+                flex: 1;
+                flex-direction: row;
+                justify-content: flex-start;
+                gap: 14px;
+            }
+
+            .hs-channel {
+                min-height: 140px;
+            }
+
+            .nav-links {
+                gap: 14px;
+            }
+
+            .nav-links a {
+                font-size: 0.78rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .compare-label { width: 70px; font-size: 0.82rem; }
+            .hero { padding: 110px 0 40px; }
+            section { padding: 44px 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    <div class="grid-overlay"></div>
+
+    <nav id="navbar">
+        <div class="container">
+            <a href="index.html" class="logo">yokings</a>
+            <ul class="nav-links">
+                <li><a href="#principle">原理</a></li>
+                <li><a href="#handshake">握手</a></li>
+                <li><a href="#compare">对比</a></li>
+                <li><a href="#demo">演示</a></li>
+                <li><a href="#frame">帧结构</a></li>
+                <li><a href="#code">代码</a></li>
+                <li><a href="#security">安全</a></li>
+                <li><a href="index.html" class="back-home">← 首页</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Section 1: Hero -->
+        <section class="hero">
+            <div class="container">
+                <div class="hero-badge fade-in">
+                    <span class="dot"></span>
+                    实时通信 · 深度教程
+                </div>
+                <h1 class="fade-in">
+                    <span class="gradient-text">WebSocket 深度解析</span>
+                </h1>
+                <p class="fade-in">一次握手，持久连接，全双工双向通信——实时互联网的基石</p>
+
+                <div class="conn-viz fade-in">
+                    <div class="conn-viz-inner">
+                        <div class="conn-node">
+                            <div class="node-box">💻</div>
+                            <div class="node-label">Client</div>
+                        </div>
+                        <div class="conn-line">
+                            <div class="packet right"></div>
+                            <div class="packet left"></div>
+                        </div>
+                        <div class="conn-node">
+                            <div class="node-box">🖥️</div>
+                            <div class="node-label">Server</div>
+                        </div>
+                    </div>
+                    <div class="conn-status">
+                        状态: <span class="ok">CONNECTED</span> · 全双工通道已建立 · 双向数据流持续传输
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: 什么是 WebSocket -->
+        <section id="principle">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">通俗解释</div>
+                    <h2 class="section-title">什么是 WebSocket</h2>
+                    <p class="section-desc">HTTP 像打电话——你说一句，对方答一句，说完就挂；WebSocket 像面对面聊天——双方随时开口，话筒始终在线。</p>
+                </div>
+
+                <div class="card-grid cols-2 reveal">
+                    <div class="card analogy-card">
+                        <div class="analogy-icon">📞</div>
+                        <span class="analogy-tag http">HTTP · 半双工</span>
+                        <h3>打电话模式</h3>
+                        <p>每次都要先拨号建立连接（请求），听完对方回答后挂断。想再问？重新拨号。每次都要带上完整的"身份头"（Cookie、UA 等），开销大，无法主动接收信息。</p>
+                    </div>
+                    <div class="card analogy-card">
+                        <div class="analogy-icon">👥</div>
+                        <span class="analogy-tag ws">WebSocket · 全双工</span>
+                        <h3>面对面聊天</h3>
+                        <p>只需一次"握手"建立连接，之后双方随时可以同时开口。轻量级数据帧（2~10 字节头），服务器可以主动推送，连接持久保持，实时性极高。</p>
+                    </div>
+                </div>
+
+                <div class="compare-diagram reveal">
+                    <div class="compare-row">
+                        <div class="compare-label">HTTP</div>
+                        <div class="compare-flow">
+                            <span class="flow-node client">Client</span>
+                            <span class="flow-node server">Server</span>
+                            <span class="flow-packet http-req">请求</span>
+                            <span class="flow-packet http-res">响应</span>
+                        </div>
+                    </div>
+                    <div class="compare-row">
+                        <div class="compare-label">WebSocket</div>
+                        <div class="compare-flow">
+                            <span class="flow-node client">Client</span>
+                            <span class="flow-node server">Server</span>
+                            <span class="flow-packet ws-req">发送</span>
+                            <span class="flow-packet ws-res">推送</span>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="section-desc reveal" style="margin-top: 18px;">
+                    上图中，HTTP 必须等一个来回结束才能发起下一次请求；而 WebSocket 的两个方向都在持续流动，互不阻塞。
+                </p>
+            </div>
+        </section>
+
+        <!-- Section 3: 握手原理 -->
+        <section id="handshake">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">交互式演示</div>
+                    <h2 class="section-title">握手原理</h2>
+                    <p class="section-desc">WebSocket 复用一次 HTTP 请求完成协议升级。点击下方按钮，逐步观察握手全过程。</p>
+                </div>
+
+                <div class="btn-row reveal">
+                    <button class="btn btn-primary" id="hsStartBtn" onclick="startHandshake()">▶ 开始握手</button>
+                    <button class="btn btn-secondary" id="hsResetBtn" onclick="resetHandshake()">↺ 重置</button>
+                </div>
+
+                <div class="handshake-stage reveal">
+                    <div class="handshake-flow">
+                        <div class="hs-node">
+                            <div class="hs-icon">💻</div>
+                            <div class="hs-name">Client</div>
+                            <div class="hs-sub">浏览器</div>
+                        </div>
+                        <div class="hs-channel">
+                            <div class="hs-msg right" id="hsMsg1">
+                                <span class="arrow">→</span>GET /chat HTTP/1.1<br>
+                                <span style="color: var(--text-secondary); font-size: 0.72rem;">Upgrade: websocket · Sec-WebSocket-Key: dGhlIHNhbXBsZQ==</span>
+                            </div>
+                            <div class="hs-msg left" id="hsMsg2">
+                                <span class="arrow">←</span>HTTP/1.1 101 Switching Protocols<br>
+                                <span style="color: var(--text-secondary); font-size: 0.72rem;">Upgrade: websocket · Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</span>
+                            </div>
+                        </div>
+                        <div class="hs-node">
+                            <div class="hs-icon">🖥️</div>
+                            <div class="hs-name">Server</div>
+                            <div class="hs-sub">HTTP→WS</div>
+                        </div>
+                    </div>
+
+                    <div class="hs-step" id="hsStep1">
+                        <span class="step-num">1</span>客户端发起 HTTP GET 请求，携带 <code class="inline">Upgrade: websocket</code> 头和随机生成的 <code class="inline">Sec-WebSocket-Key</code>
+                    </div>
+                    <div class="hs-step" id="hsStep2">
+                        <span class="step-num">2</span>服务器返回 <code class="inline">101 Switching Protocols</code>，并对 Key 做 SHA-1 + Base64 计算返回 <code class="inline">Sec-WebSocket-Accept</code>
+                    </div>
+                    <div class="hs-step" id="hsStep3">
+                        <span class="step-num">3</span>TCP 连接升级完成，后续数据帧改为 WebSocket 二进制协议传输，双方可随时互发消息
+                    </div>
+
+                    <div style="margin-top: 16px;">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px;">客户端请求头：</div>
+                        <div class="code-block">
+<span class="ln">1</span><span class="tok-key">GET</span> /chat <span class="tok-key">HTTP</span>/1.1
+<span class="ln">2</span><span class="tok-attr">Host</span>: server.example.com
+<span class="ln">3</span><span class="tok-attr">Upgrade</span>: websocket
+<span class="ln">4</span><span class="tok-attr">Connection</span>: Upgrade
+<span class="ln">5</span><span class="tok-attr">Sec-WebSocket-Key</span>: dGhlIHNhbXBsZQ==
+<span class="ln">6</span><span class="tok-attr">Sec-WebSocket-Version</span>: <span class="tok-num">13</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 14px;">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px;">服务器响应头：</div>
+                        <div class="code-block">
+<span class="ln">1</span><span class="tok-key">HTTP</span>/1.1 <span class="tok-num">101</span> Switching Protocols
+<span class="ln">2</span><span class="tok-attr">Upgrade</span>: websocket
+<span class="ln">3</span><span class="tok-attr">Connection</span>: Upgrade
+<span class="ln">4</span><span class="tok-attr">Sec-WebSocket-Accept</span>: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: 对比表 -->
+        <section id="compare">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">技术选型</div>
+                    <h2 class="section-title">HTTP vs WebSocket vs SSE</h2>
+                    <p class="section-desc">三者各有定位，点击下方 Tab 高亮对应列，理解每种技术的优势与局限。</p>
+                </div>
+
+                <div class="cmp-tabs reveal">
+                    <button class="cmp-tab active" data-col="0">HTTP</button>
+                    <button class="cmp-tab" data-col="1">WebSocket</button>
+                    <button class="cmp-tab" data-col="2">SSE</button>
+                    <button class="cmp-tab" data-col="-1">全部</button>
+                </div>
+
+                <div class="cmp-table-wrap reveal">
+                    <table class="cmp-table" id="cmpTable">
+                        <thead>
+                            <tr>
+                                <th>特性</th>
+                                <th>HTTP</th>
+                                <th>WebSocket</th>
+                                <th>SSE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>通信方向</td><td class="bad">单向（请求-响应）</td><td class="good">全双工双向</td><td class="neutral">服务器→客户端</td></tr>
+                            <tr><td>连接方式</td><td class="bad">短连接（可 Keep-Alive）</td><td class="good">持久连接</td><td class="good">持久连接</td></tr>
+                            <tr><td>服务器推送</td><td class="bad">不支持</td><td class="good">原生支持</td><td class="good">原生支持</td></tr>
+                            <tr><td>数据头部大小</td><td class="bad">大（数百字节~KB）</td><td class="good">极小（2~10 字节）</td><td class="neutral">中等（每条消息含换行）</td></tr>
+                            <tr><td>实时性</td><td class="bad">低（轮询延迟高）</td><td class="good">高（毫秒级）</td><td class="good">较高（毫秒级）</td></tr>
+                            <tr><td>协议</td><td>HTTP/1.1、HTTP/2</td><td>ws://、wss://（基于 TCP）</td><td>HTTP/1.1</td></tr>
+                            <tr><td>二进制支持</td><td class="good">支持</td><td class="good">原生支持</td><td class="bad">仅文本（需 Base64）</td></tr>
+                            <tr><td>自动重连</td><td class="bad">无</td><td class="bad">需手动实现</td><td class="good">浏览器内置</td></tr>
+                            <tr><td>典型场景</td><td>网页、API、文件下载</td><td>聊天、游戏、协同</td><td>行情、通知、日志流</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="section-desc reveal" style="margin-top: 16px; font-size: 0.9rem;">
+                    💡 经验法则：只需要服务器推消息（如股票行情）选 SSE；需要双向实时交互（如聊天、游戏）选 WebSocket；普通请求响应用 HTTP 即可。
+                </p>
+            </div>
+        </section>
+
+        <!-- Section 5: 应用场景 -->
+        <section id="scenarios">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">实战场景</div>
+                    <h2 class="section-title">核心应用场景</h2>
+                    <p class="section-desc">凡是需要"服务器主动推送"或"低延迟双向交互"的场景，几乎都是 WebSocket 的主场。</p>
+                </div>
+
+                <div class="card-grid cols-3 reveal">
+                    <div class="card hoverable">
+                        <h3><span class="emoji">💬</span>实时聊天</h3>
+                        <p>消息即时送达、已读回执、在线状态同步。微信网页版、Slack、Discord 等均基于 WebSocket。</p>
+                    </div>
+                    <div class="card hoverable">
+                        <h3><span class="emoji">🎬</span>直播弹幕</h3>
+                        <p>百万级并发弹幕下发，WebSocket 推送比轮询节省 90% 带宽，延迟低于 200ms。</p>
+                    </div>
+                    <div class="card hoverable">
+                        <h3><span class="emoji">📊</span>实时数据监控</h3>
+                        <p>服务器 CPU、IoT 传感器、股票行情持续推送，前端图表平滑滚动更新。</p>
+                    </div>
+                    <div class="card hoverable">
+                        <h3><span class="emoji">📝</span>协同办公</h3>
+                        <p>多人同时编辑文档（飞书、Notion），光标位置、文本变更通过 WebSocket 实时广播。</p>
+                    </div>
+                    <div class="card hoverable">
+                        <h3><span class="emoji">🎮</span>在线游戏</h3>
+                        <p>多人对战的位置同步、技能释放，每秒数十次双向通信，WebSocket 提供稳定低延迟通道。</p>
+                    </div>
+                    <div class="card hoverable">
+                        <h3><span class="emoji">🤖</span>AI 流式输出</h3>
+                        <p>大模型逐 Token 流式返回，ChatGPT、Claude 网页版通过 WebSocket 或 SSE 实现"打字机"效果。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 6: Echo 演示 -->
+        <section id="demo">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">核心交互</div>
+                    <h2 class="section-title">在线 Echo 服务器演示</h2>
+                    <p class="section-desc">连接到真实 Echo 服务器，发送的消息会被原样回传。若公网服务不可用，将自动切换到本地仿真模式。</p>
+                </div>
+
+                <div class="echo-panel reveal">
+                    <div class="echo-status">
+                        <span class="status-dot disconnected" id="statusDot"></span>
+                        <span id="statusText">未连接</span>
+                        <span style="margin-left: auto; color: var(--text-secondary); font-size: 0.8rem;" id="statusUrl">wss://echo.websocket.events</span>
+                    </div>
+
+                    <div class="btn-row">
+                        <button class="btn btn-primary" id="connectBtn" onclick="connectEcho()">连接</button>
+                        <button class="btn btn-danger" id="disconnectBtn" onclick="disconnectEcho()" disabled>断开</button>
+                        <button class="btn btn-secondary" id="autoTestBtn" onclick="autoTest()" disabled>⚡ 自动测试（5 条）</button>
+                    </div>
+
+                    <div class="echo-log" id="echoLog">
+                        <div class="log-entry info">
+                            <span class="log-time">--:--:--</span>
+                            <span>等待连接…</span>
+                        </div>
+                    </div>
+
+                    <div class="echo-input-row">
+                        <input type="text" class="echo-input" id="msgInput" placeholder="输入要发送的消息，回车发送…" disabled onkeydown="if(event.key==='Enter')sendEcho()">
+                        <button class="btn btn-primary" id="sendBtn" onclick="sendEcho()" disabled>发送</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 7: 帧结构 -->
+        <section id="frame">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">协议底层</div>
+                    <h2 class="section-title">数据帧结构可视化</h2>
+                    <p class="section-desc">WebSocket 数据以"帧"为单位传输。下方可交互式构建帧，实时观察每个比特位的含义。</p>
+                </div>
+
+                <div class="frame-builder reveal">
+                    <div class="frame-controls">
+                        <div class="frame-control">
+                            <label>FIN（是否最后一帧）</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="finToggle" checked onchange="renderFrame()">
+                                <span class="toggle-track"></span>
+                                <span id="finLabel" style="font-size: 0.82rem;">1</span>
+                            </label>
+                        </div>
+                        <div class="frame-control">
+                            <label>Opcode（操作码）</label>
+                            <select id="opcodeSelect" onchange="renderFrame()">
+                                <option value="0x0">0x0 · continuation</option>
+                                <option value="0x1" selected>0x1 · text</option>
+                                <option value="0x2">0x2 · binary</option>
+                                <option value="0x8">0x8 · close</option>
+                                <option value="0x9">0x9 · ping</option>
+                                <option value="0xA">0xA · pong</option>
+                            </select>
+                        </div>
+                        <div class="frame-control">
+                            <label>Mask（客户端必须为 1）</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="maskToggle" checked onchange="renderFrame()">
+                                <span class="toggle-track"></span>
+                                <span id="maskLabel" style="font-size: 0.82rem;">1</span>
+                            </label>
+                        </div>
+                        <div class="frame-control">
+                            <label>Payload（负载数据）</label>
+                            <input type="text" id="payloadInput" value="Hello" oninput="renderFrame()">
+                        </div>
+                    </div>
+
+                    <div class="frame-visual">
+                        <div class="frame-bits" id="frameBits"></div>
+                    </div>
+
+                    <div class="frame-legend">
+                        <div class="legend-item"><span class="legend-color" style="background: rgba(99,102,241,0.5);"></span>FIN</div>
+                        <div class="legend-item"><span class="legend-color" style="background: rgba(245,158,11,0.5);"></span>RSV1/2/3</div>
+                        <div class="legend-item"><span class="legend-color" style="background: rgba(34,197,94,0.5);"></span>Opcode</div>
+                        <div class="legend-item"><span class="legend-color" style="background: rgba(239,68,68,0.5);"></span>Mask</div>
+                        <div class="legend-item"><span class="legend-color" style="background: rgba(139,92,246,0.5);"></span>Payload Len</div>
+                    </div>
+
+                    <div class="frame-info" id="frameInfo"></div>
+
+                    <div style="margin-top: 16px;">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px;">Hex 转储：</div>
+                        <div class="frame-hex" id="frameHex"></div>
+                    </div>
+                </div>
+
+                <p class="section-desc reveal" style="margin-top: 16px; font-size: 0.88rem;">
+                    📌 客户端→服务器方向的帧必须设置 Mask 位并用 4 字节掩码对 Payload 做 XOR；服务器→客户端方向不需要掩码。
+                </p>
+            </div>
+        </section>
+
+        <!-- Section 8: 心跳与重连 -->
+        <section id="heartbeat">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">可靠性</div>
+                    <h2 class="section-title">心跳与重连机制</h2>
+                    <p class="section-desc">TCP 无法立即感知对端断开，需要应用层心跳保活；连接异常断开后，指数退避重连可避免雪崩。</p>
+                </div>
+
+                <div class="heartbeat-stage reveal">
+                    <div class="btn-row">
+                        <button class="btn btn-primary" id="hbStartBtn" onclick="startHeartbeat()">▶ 开始演示</button>
+                        <label class="toggle-switch" style="margin-left: auto;">
+                            <input type="checkbox" id="hbToggle" checked>
+                            <span class="toggle-track"></span>
+                            <span style="font-size: 0.85rem;">启用心跳</span>
+                        </label>
+                    </div>
+
+                    <div class="hb-status" id="hbStatus">点击"开始演示"启动心跳循环</div>
+
+                    <div class="hb-flow">
+                        <div class="hb-node" id="hbClient">
+                            <div class="hb-icon">💻</div>
+                            <div class="hb-name">Client</div>
+                        </div>
+                        <div class="hb-channel" id="hbChannel">
+                            <div class="hb-ping" id="hbPing">PING</div>
+                            <div class="hb-pong" id="hbPong">PONG</div>
+                        </div>
+                        <div class="hb-node" id="hbServer">
+                            <div class="hb-icon">🖥️</div>
+                            <div class="hb-name">Server</div>
+                        </div>
+                    </div>
+
+                    <div class="frame-info">
+                        心跳间隔 <code>3s</code> · 断线检测 <code>6s</code> 无响应判定超时 · 重连退避 <code>1s → 2s → 4s → 8s</code>（上限 30s）
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 9: 代码示例 -->
+        <section id="code">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">动手实践</div>
+                    <h2 class="section-title">代码示例</h2>
+                    <p class="section-desc">三个完整可运行的示例，覆盖客户端、服务端和聊天室全栈。</p>
+                </div>
+
+                <div class="reveal">
+                    <div class="code-tabs">
+                        <button class="code-tab active" data-tab="client" onclick="switchCodeTab('client')">浏览器客户端</button>
+                        <button class="code-tab" data-tab="server" onclick="switchCodeTab('server')">Node.js 服务端</button>
+                        <button class="code-tab" data-tab="chat" onclick="switchCodeTab('chat')">完整聊天室</button>
+                    </div>
+
+                    <div class="code-panel active" id="code-client">
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+<span class="ln">1</span><span class="tok-com">// 浏览器客户端：完整 WebSocket 生命周期</span>
+<span class="ln">2</span><span class="tok-key">const</span> ws = <span class="tok-key">new</span> <span class="tok-fn">WebSocket</span>(<span class="tok-str">'wss://example.com/ws'</span>);
+<span class="ln">3</span>
+<span class="ln">4</span><span class="tok-com">// 连接建立后触发</span>
+<span class="ln">5</span>ws.<span class="tok-fn">addEventListener</span>(<span class="tok-str">'open'</span>, () =&gt; {
+<span class="ln">6</span>  console.<span class="tok-fn">log</span>(<span class="tok-str">'连接已建立'</span>);
+<span class="ln">7</span>  ws.<span class="tok-fn">send</span>(<span class="tok-str">'Hello Server!'</span>);
+<span class="ln">8</span>});
+<span class="ln">9</span>
+<span class="ln">10</span><span class="tok-com">// 接收服务端消息</span>
+<span class="ln">11</span>ws.<span class="tok-fn">addEventListener</span>(<span class="tok-str">'message'</span>, (event) =&gt; {
+<span class="ln">12</span>  console.<span class="tok-fn">log</span>(<span class="tok-str">'收到:'</span>, event.data);
+<span class="ln">13</span>});
+<span class="ln">14</span>
+<span class="ln">15</span><span class="tok-com">// 连接异常</span>
+<span class="ln">16</span>ws.<span class="tok-fn">addEventListener</span>(<span class="tok-str">'error'</span>, (err) =&gt; {
+<span class="ln">17</span>  console.<span class="tok-fn">error</span>(<span class="tok-str">'WebSocket 错误'</span>, err);
+<span class="ln">18</span>});
+<span class="ln">19</span>
+<span class="ln">20</span><span class="tok-com">// 连接关闭（code 1000 正常 / 1006 异常 / 1011 服务端错误）</span>
+<span class="ln">21</span>ws.<span class="tok-fn">addEventListener</span>(<span class="tok-str">'close'</span>, (event) =&gt; {
+<span class="ln">22</span>  console.<span class="tok-fn">log</span>(<span class="tok-str">`关闭 code=${event.code} reason=${event.reason}`</span>);
+<span class="ln">23</span>});
+<span class="ln">24</span>
+<span class="ln">25</span><span class="tok-com">// readyState: 0=CONNECTING 1=OPEN 2=CLOSING 3=CLOSED</span>
+<span class="ln">26</span><span class="tok-key">if</span> (ws.readyState === WebSocket.<span class="tok-bool">OPEN</span>) {
+<span class="ln">27</span>  ws.<span class="tok-fn">send</span>(<span class="tok-key">new</span> <span class="tok-fn">Uint8Array</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>])); <span class="tok-com">// 发送二进制</span>
+<span class="ln">28</span>}
+                        </div>
+                    </div>
+
+                    <div class="code-panel" id="code-server">
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+<span class="ln">1</span><span class="tok-com">// Node.js 服务端：基于 ws 库的基础服务器</span>
+<span class="ln">2</span><span class="tok-com">// 安装：npm install ws</span>
+<span class="ln">3</span><span class="tok-key">const</span> { <span class="tok-fn">WebSocketServer</span> } = <span class="tok-fn">require</span>(<span class="tok-str">'ws'</span>);
+<span class="ln">4</span>
+<span class="ln">5</span><span class="tok-key">const</span> wss = <span class="tok-key">new</span> <span class="tok-fn">WebSocketServer</span>({ port: <span class="tok-num">8080</span> });
+<span class="ln">6</span>
+<span class="ln">7</span>wss.<span class="tok-fn">on</span>(<span class="tok-str">'connection'</span>, (ws, req) =&gt; {
+<span class="ln">8</span>  console.<span class="tok-fn">log</span>(<span class="tok-str">'新连接来自:'</span>, req.socket.remoteAddress);
+<span class="ln">9</span>
+<span class="ln">10</span>  <span class="tok-com">// 接收客户端消息</span>
+<span class="ln">11</span>  ws.<span class="tok-fn">on</span>(<span class="tok-str">'message'</span>, (data, isBinary) =&gt; {
+<span class="ln">12</span>    console.<span class="tok-fn">log</span>(<span class="tok-str">'收到:'</span>, data.<span class="tok-fn">toString</span>());
+<span class="ln">13</span>    ws.<span class="tok-fn">send</span>(<span class="tok-str">'Echo: '</span> + data.<span class="tok-fn">toString</span>()); <span class="tok-com">// 回声</span>
+<span class="ln">14</span>  });
+<span class="ln">15</span>
+<span class="ln">16</span>  <span class="tok-com">// 心跳保活：每 30s 发 ping，无 pong 则断开</span>
+<span class="ln">17</span>  ws.<span class="tok-fn">on</span>(<span class="tok-str">'pong'</span>, () =&gt; { ws.<span class="tok-fn">isAlive</span> = <span class="tok-bool">true</span>; });
+<span class="ln">18</span>  ws.isAlive = <span class="tok-bool">true</span>;
+<span class="ln">19</span>
+<span class="ln">20</span>  ws.<span class="tok-fn">on</span>(<span class="tok-str">'close'</span>, () =&gt; console.<span class="tok-fn">log</span>(<span class="tok-str">'连接关闭'</span>));
+<span class="ln">21</span>});
+<span class="ln">22</span>
+<span class="ln">23</span><span class="tok-com">// 全局心跳定时器</span>
+<span class="ln">24</span><span class="tok-fn">setInterval</span>(() =&gt; {
+<span class="ln">25</span>  wss.clients.<span class="tok-fn">forEach</span>((ws) =&gt; {
+<span class="ln">26</span>    <span class="tok-key">if</span> (!ws.isAlive) <span class="tok-key">return</span> ws.<span class="tok-fn">terminate</span>();
+<span class="ln">27</span>    ws.isAlive = <span class="tok-bool">false</span>;
+<span class="ln">28</span>    ws.<span class="tok-fn">ping</span>();
+<span class="ln">29</span>  });
+<span class="ln">30</span>}, <span class="tok-num">30000</span>);
+                        </div>
+                    </div>
+
+                    <div class="code-panel" id="code-chat">
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+<span class="ln">1</span><span class="tok-com">// ===== 服务端：简单群聊 chat-server.js =====</span>
+<span class="ln">2</span><span class="tok-key">const</span> { <span class="tok-fn">WebSocketServer</span> } = <span class="tok-fn">require</span>(<span class="tok-str">'ws'</span>);
+<span class="ln">3</span><span class="tok-key">const</span> wss = <span class="tok-key">new</span> <span class="tok-fn">WebSocketServer</span>({ port: <span class="tok-num">8080</span> });
+<span class="ln">4</span>
+<span class="ln">5</span>wss.<span class="tok-fn">on</span>(<span class="tok-str">'connection'</span>, (ws) =&gt; {
+<span class="ln">6</span>  <span class="tok-com">// 广播给所有人</span>
+<span class="ln">7</span>  <span class="tok-key">function</span> <span class="tok-fn">broadcast</span>(msg) {
+<span class="ln">8</span>    wss.clients.<span class="tok-fn">forEach</span>((c) =&gt; {
+<span class="ln">9</span>      <span class="tok-key">if</span> (c.readyState === <span class="tok-fn">WebSocket</span>.<span class="tok-bool">OPEN</span>) c.<span class="tok-fn">send</span>(msg);
+<span class="ln">10</span>    });
+<span class="ln">11</span>  }
+<span class="ln">12</span>  ws.<span class="tok-fn">on</span>(<span class="tok-str">'message'</span>, (data) =&gt; <span class="tok-fn">broadcast</span>(data.<span class="tok-fn">toString</span>()));
+<span class="ln">13</span>});
+<span class="ln">14</span>
+<span class="ln">15</span><span class="tok-com">// ===== 客户端：chat.html =====</span>
+<span class="ln">16</span><span class="tok-key">const</span> ws = <span class="tok-key">new</span> <span class="tok-fn">WebSocket</span>(<span class="tok-str">'ws://localhost:8080'</span>);
+<span class="ln">17</span><span class="tok-key">const</span> log = document.<span class="tok-fn">getElementById</span>(<span class="tok-str">'log'</span>);
+<span class="ln">18</span>
+<span class="ln">19</span>ws.<span class="tok-fn">onmessage</span> = (e) =&gt; {
+<span class="ln">20</span>  log.<span class="tok-fn">innerHTML</span> += <span class="tok-str">`&lt;p&gt;${e.data}&lt;/p&gt;`</span>;
+<span class="ln">21</span>};
+<span class="ln">22</span>
+<span class="ln">23</span><span class="tok-key">function</span> <span class="tok-fn">send</span>() {
+<span class="ln">24</span>  <span class="tok-key">const</span> text = document.<span class="tok-fn">getElementById</span>(<span class="tok-str">'input'</span>).value;
+<span class="ln">25</span>  ws.<span class="tok-fn">send</span>(text); <span class="tok-com">// 广播给所有在线用户</span>
+<span class="ln">26</span>}
+<span class="ln">27</span>
+<span class="ln">28</span><span class="tok-com">// ===== 指数退避重连封装 =====</span>
+<span class="ln">29</span><span class="tok-key">function</span> <span class="tok-fn">connectWithRetry</span>(url, retry = <span class="tok-num">0</span>) {
+<span class="ln">30</span>  <span class="tok-key">const</span> ws = <span class="tok-key">new</span> <span class="tok-fn">WebSocket</span>(url);
+<span class="ln">31</span>  ws.<span class="tok-fn">onclose</span> = () =&gt; {
+<span class="ln">32</span>    <span class="tok-key">const</span> delay = Math.<span class="tok-fn">min</span>(<span class="tok-num">1000</span> * <span class="tok-num">2</span> ** retry, <span class="tok-num">30000</span>);
+<span class="ln">33</span>    <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-fn">connectWithRetry</span>(url, retry + <span class="tok-num">1</span>), delay);
+<span class="ln">34</span>  };
+<span class="ln">35</span>  <span class="tok-key">return</span> ws;
+<span class="ln">36</span>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 10: 安全 -->
+        <section id="security">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">生产实践</div>
+                    <h2 class="section-title">安全注意事项</h2>
+                    <p class="section-desc">WebSocket 不受同源策略自动保护，生产环境必须额外加固。</p>
+                </div>
+
+                <div class="card-grid cols-3 reveal">
+                    <div class="card hoverable security-card" style="display: block;">
+                        <div class="security-card" style="padding: 0;">
+                            <div class="security-icon">🔒</div>
+                            <div>
+                                <h3>wss 加密传输</h3>
+                                <p>务必使用 <code class="inline">wss://</code> 而非 <code class="inline">ws://</code>。wss 基于 TLS，防止中间人窃听和篡改，等同于 HTTPS 对 HTTP 的意义。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card hoverable security-card" style="display: block;">
+                        <div class="security-card" style="padding: 0;">
+                            <div class="security-icon">🛡️</div>
+                            <div>
+                                <h3>Origin 校验</h3>
+                                <p>浏览器会自动带上 <code class="inline">Origin</code> 头，服务端必须校验白名单，防止跨站 WebSocket 劫持（CSWSH）攻击。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card hoverable security-card" style="display: block;">
+                        <div class="security-card" style="padding: 0;">
+                            <div class="security-icon">⏱️</div>
+                            <div>
+                                <h3>限速与鉴权</h3>
+                                <p>握手阶段校验 Token / Cookie，连接后限制单连接消息频率和总连接数，防止恶意刷消息压垮服务器。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 11: 延伸阅读 -->
+        <section id="reading">
+            <div class="container">
+                <div class="section-header reveal">
+                    <div class="section-label">继续深入</div>
+                    <h2 class="section-title">延伸阅读</h2>
+                    <p class="section-desc">官方文档与权威资料，遇到细节问题随时查阅。</p>
+                </div>
+
+                <div class="links-list reveal">
+                    <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebSocket" target="_blank" rel="noopener" class="link-item">
+                        <div class="link-info">
+                            <h4>MDN WebSocket API</h4>
+                            <p>浏览器原生 WebSocket 接口的完整文档，含所有事件、属性与示例</p>
+                        </div>
+                        <span class="link-arrow">↗</span>
+                    </a>
+                    <a href="https://tools.ietf.org/html/rfc6455" target="_blank" rel="noopener" class="link-item">
+                        <div class="link-info">
+                            <h4>RFC 6455 · The WebSocket Protocol</h4>
+                            <p>WebSocket 协议规范原文，握手、帧格式、关闭码等底层定义</p>
+                        </div>
+                        <span class="link-arrow">↗</span>
+                    </a>
+                    <a href="https://web.dev/articles/eventsource-basics" target="_blank" rel="noopener" class="link-item">
+                        <div class="link-info">
+                            <h4>web.dev · SSE vs WebSocket</h4>
+                            <p>Google 出品的服务器推送技术对比，帮你选对实时通信方案</p>
+                        </div>
+                        <span class="link-arrow">↗</span>
+                    </a>
+                    <a href="https://www.runoob.com/html/html5-websocket.html" target="_blank" rel="noopener" class="link-item">
+                        <div class="link-info">
+                            <h4>菜鸟教程 · HTML5 WebSocket</h4>
+                            <p>中文入门教程，适合快速上手 API 与基础用法</p>
+                        </div>
+                        <span class="link-arrow">↗</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>© 2026 yokings · 持续学习，不断探索</p>
+            <div class="footer-links">
+                <a href="index.html">← 返回首页</a>
+                <a href="https://github.com/yokings" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        /* ===== Navbar scroll ===== */
+        const navbar = document.getElementById('navbar');
+        window.addEventListener('scroll', () => {
+            navbar.classList.toggle('scrolled', window.scrollY > 20);
+        });
+
+        /* ===== Smooth scroll ===== */
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    e.preventDefault();
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        /* ===== Intersection Observer reveal ===== */
+        const io = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    io.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.12 });
+        document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+        /* ===== Fade-in for hero ===== */
+        document.querySelectorAll('.fade-in').forEach((el, i) => {
+            el.style.animation = `fadeInUp 0.6s ease ${i * 0.1}s forwards`;
+            el.style.opacity = '0';
+        });
+        const styleFade = document.createElement('style');
+        styleFade.textContent = '@keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } } .fade-in { transform: translateY(20px); }';
+        document.head.appendChild(styleFade);
+
+        /* ===== Section 3: Handshake animation ===== */
+        let hsTimer = null;
+        function resetHandshake() {
+            clearTimeouts();
+            ['hsStep1', 'hsStep2', 'hsStep3'].forEach(id => document.getElementById(id).classList.remove('active'));
+            ['hsMsg1', 'hsMsg2'].forEach(id => document.getElementById(id).classList.remove('show'));
+            document.getElementById('hsStartBtn').disabled = false;
+        }
+        function clearTimeouts() {
+            if (hsTimer) { clearTimeout(hsTimer); hsTimer = null; }
+        }
+        function startHandshake() {
+            resetHandshake();
+            document.getElementById('hsStartBtn').disabled = true;
+            setTimeout(() => document.getElementById('hsStep1').classList.add('active'), 100);
+            setTimeout(() => document.getElementById('hsMsg1').classList.add('show'), 600);
+            setTimeout(() => {
+                document.getElementById('hsStep1').classList.remove('active');
+                document.getElementById('hsStep2').classList.add('active');
+                document.getElementById('hsMsg1').classList.remove('show');
+            }, 2200);
+            setTimeout(() => document.getElementById('hsMsg2').classList.add('show'), 2700);
+            setTimeout(() => {
+                document.getElementById('hsStep2').classList.remove('active');
+                document.getElementById('hsStep3').classList.add('active');
+            }, 4300);
+            setTimeout(() => {
+                document.getElementById('hsStartBtn').disabled = false;
+            }, 5200);
+        }
+
+        /* ===== Section 4: Comparison tabs ===== */
+        document.querySelectorAll('.cmp-tab').forEach(tab => {
+            tab.addEventListener('click', function () {
+                document.querySelectorAll('.cmp-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                const col = parseInt(this.dataset.col);
+                const rows = document.querySelectorAll('#cmpTable tbody tr');
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    cells.forEach(c => c.classList.remove('highlight'));
+                    if (col >= 0 && cells[col + 1]) cells[col + 1].classList.add('highlight');
+                });
+            });
+        });
+
+        /* ===== Section 6: Echo demo ===== */
+        let ws = null;
+        let simMode = false;
+        let simTimer = null;
+        const ECHO_URLS = ['wss://echo.websocket.events', 'wss://ws.postman-echo.com/raw'];
+
+        function logEntry(type, text) {
+            const log = document.getElementById('echoLog');
+            const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            if (type === 'sent') {
+                entry.innerHTML = `<span class="log-time">${time}</span><span class="log-arrow">→ 发送</span><span>${escapeHtml(text)}</span>`;
+            } else if (type === 'received') {
+                entry.innerHTML = `<span class="log-time">${time}</span><span class="log-arrow">← 接收</span><span>${escapeHtml(text)}</span>`;
+            } else {
+                entry.innerHTML = `<span class="log-time">${time}</span><span>${text}</span>`;
+            }
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function setStatus(state, text) {
+            const dot = document.getElementById('statusDot');
+            const txt = document.getElementById('statusText');
+            dot.className = 'status-dot ' + state;
+            txt.textContent = text;
+        }
+
+        function connectEcho() {
+            document.getElementById('connectBtn').disabled = true;
+            setStatus('connecting', '连接中…');
+            logEntry('info', '正在连接 ' + ECHO_URLS[0] + ' …');
+
+            let urlIdx = 0;
+            function tryConnect() {
+                const url = ECHO_URLS[urlIdx];
+                document.getElementById('statusUrl').textContent = url;
+                try {
+                    ws = new WebSocket(url);
+                } catch (e) {
+                    fallbackToSim();
+                    return;
+                }
+
+                const connectTimeout = setTimeout(() => {
+                    if (ws && ws.readyState !== WebSocket.OPEN) {
+                        try { ws.close(); } catch (e) {}
+                        tryNextOrFallback();
+                    }
+                }, 4000);
+
+                ws.onopen = () => {
+                    clearTimeout(connectTimeout);
+                    setStatus('connected', '已连接');
+                    logEntry('info', '✅ 连接成功，可开始发送消息');
+                    document.getElementById('disconnectBtn').disabled = false;
+                    document.getElementById('autoTestBtn').disabled = false;
+                    document.getElementById('sendBtn').disabled = false;
+                    document.getElementById('msgInput').disabled = false;
+                    document.getElementById('connectBtn').disabled = true;
+                };
+
+                ws.onmessage = (event) => {
+                    logEntry('received', event.data);
+                };
+
+                ws.onerror = () => {
+                    clearTimeout(connectTimeout);
+                };
+
+                ws.onclose = () => {
+                    clearTimeout(connectTimeout);
+                    if (document.getElementById('connectBtn').disabled && !simMode) {
+                        // Was connected, now closed
+                        setStatus('disconnected', '连接已断开');
+                        logEntry('error', '❌ 连接已关闭');
+                        resetEchoControls();
+                    }
+                };
+            }
+
+            function tryNextOrFallback() {
+                urlIdx++;
+                if (urlIdx < ECHO_URLS.length) {
+                    logEntry('info', '该地址不可用，尝试备用服务器…');
+                    tryConnect();
+                } else {
+                    fallbackToSim();
+                }
+            }
+
+            function fallbackToSim() {
+                simMode = true;
+                setStatus('connected', '已连接（本地仿真）');
+                document.getElementById('statusUrl').textContent = '本地仿真模式';
+                logEntry('info', '⚠ 公网 Echo 服务不可用，已切换到本地仿真模式（消息会延迟回显）');
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('autoTestBtn').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('msgInput').disabled = false;
+                document.getElementById('connectBtn').disabled = true;
+            }
+
+            tryConnect();
+        }
+
+        function resetEchoControls() {
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+            document.getElementById('autoTestBtn').disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('msgInput').disabled = true;
+        }
+
+        function disconnectEcho() {
+            if (simMode) {
+                if (simTimer) { clearTimeout(simTimer); simTimer = null; }
+                simMode = false;
+                setStatus('disconnected', '已断开');
+                logEntry('info', '👋 已断开仿真连接');
+                document.getElementById('statusUrl').textContent = 'wss://echo.websocket.events';
+                resetEchoControls();
+                return;
+            }
+            if (ws) {
+                try { ws.close(); } catch (e) {}
+                ws = null;
+            }
+            setStatus('disconnected', '已断开');
+            logEntry('info', '👋 主动断开连接');
+            resetEchoControls();
+        }
+
+        function sendEcho() {
+            const input = document.getElementById('msgInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+            logEntry('sent', msg);
+            if (simMode) {
+                simTimer = setTimeout(() => logEntry('received', msg), 200 + Math.random() * 300);
+            } else if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(msg);
+            }
+            input.value = '';
+        }
+
+        function autoTest() {
+            logEntry('info', '🚀 开始自动测试：连续发送 5 条消息');
+            const msgs = ['ping', 'hello', 'websocket', 'realtime', '🚀'];
+            msgs.forEach((m, i) => {
+                setTimeout(() => {
+                    logEntry('sent', m);
+                    if (simMode) {
+                        setTimeout(() => logEntry('received', m), 150 + Math.random() * 250);
+                    } else if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(m);
+                    }
+                }, i * 400);
+            });
+        }
+
+        /* ===== Section 7: Frame builder ===== */
+        function renderFrame() {
+            const fin = document.getElementById('finToggle').checked;
+            const opcodeStr = document.getElementById('opcodeSelect').value;
+            const opcode = parseInt(opcodeStr, 16);
+            const mask = document.getElementById('maskToggle').checked;
+            const payload = document.getElementById('payloadInput').value;
+            const payloadBytes = Array.from(new TextEncoder().encode(payload));
+            const len = payloadBytes.length;
+
+            document.getElementById('finLabel').textContent = fin ? '1' : '0';
+            document.getElementById('maskLabel').textContent = mask ? '1' : '0';
+
+            // Build bit groups
+            const finBit = fin ? 1 : 0;
+            const rsvBits = [0, 0, 0];
+            const opcodeBits = [(opcode >> 3) & 1, (opcode >> 2) & 1, (opcode >> 1) & 1, opcode & 1];
+            const maskBit = mask ? 1 : 0;
+
+            // Payload length encoding
+            let lenBits7, lenExtended = [];
+            if (len <= 125) {
+                lenBits7 = len;
+            } else if (len <= 65535) {
+                lenBits7 = 126;
+                lenExtended = [(len >> 8) & 0xff, len & 0xff];
+            } else {
+                lenBits7 = 127;
+                // 8 bytes big-endian (simplified, only lower 4 bytes meaningful for demo)
+                for (let i = 7; i >= 0; i--) lenExtended.push((len >> (i * 8)) & 0xff);
+            }
+            const lenBitArray = [];
+            for (let i = 6; i >= 0; i--) lenBitArray.push((lenBits7 >> i) & 1);
+
+            // Masking key (random 4 bytes)
+            const maskKey = mask ? [0x37, 0xfa, 0x21, 0x3d] : [];
+
+            // Masked payload
+            const maskedPayload = mask ? payloadBytes.map((b, i) => b ^ maskKey[i % 4]) : payloadBytes;
+
+            // Render bit visualization
+            const bitsContainer = document.getElementById('frameBits');
+            let html = '';
+            html += bitGroup('fin', [finBit], 'FIN');
+            html += bitGroup('rsv', rsvBits, 'RSV 1/2/3');
+            html += bitGroup('opcode', opcodeBits, 'Opcode');
+            html += bitGroup('mask', [maskBit], 'Mask');
+            html += bitGroup('len', lenBitArray, lenBits7 === 126 ? 'Len=126' : lenBits7 === 127 ? 'Len=127' : 'Payload Len');
+            if (lenBits7 === 126) {
+                html += bitGroup('len', Array.from({ length: 16 }, (_, i) => (len >> (15 - i)) & 1), 'Extended Len (16)');
+            } else if (lenBits7 === 127) {
+                html += bitGroup('len', Array.from({ length: 64 }, (_, i) => 0), 'Extended Len (64)');
+            }
+            if (mask) {
+                html += bitGroup('len', maskKey.flatMap(b => Array.from({ length: 8 }, (_, i) => (b >> (7 - i)) & 1)), 'Masking Key (32)');
+            }
+            // Payload bits (limit display)
+            const payloadBitLimit = maskedPayload.slice(0, 8);
+            if (payloadBitLimit.length > 0) {
+                html += bitGroup('opcode', payloadBitLimit.flatMap(b => Array.from({ length: 8 }, (_, i) => (b >> (7 - i)) & 1)), 'Payload…');
+            }
+            bitsContainer.innerHTML = html;
+
+            // Build hex
+            const firstByte = (finBit << 7) | (opcode & 0x0f);
+            const secondByte = (maskBit << 7) | lenBits7;
+            const hexArr = [firstByte, secondByte, ...lenExtended, ...maskKey, ...maskedPayload];
+            const hex = hexArr.map(b => b.toString(16).padStart(2, '0')).join(' ');
+            document.getElementById('frameHex').textContent = hex;
+
+            // Info
+            const opNames = { 0x0: 'continuation', 0x1: 'text', 0x2: 'binary', 0x8: 'close', 0x9: 'ping', 0xA: 'pong' };
+            document.getElementById('frameInfo').innerHTML =
+                `FIN=<code>${finBit}</code> · Opcode=<code>0x${opcode.toString(16)} (${opNames[opcode]})</code> · ` +
+                `Mask=<code>${maskBit}</code> · Payload 长度=<code>${len}</code> 字节 · ` +
+                `总帧大小=<code>${hexArr.length}</code> 字节`;
+        }
+
+        function bitGroup(cls, bits, label) {
+            const bitsHtml = bits.map(b => `<span class="bit ${b ? 'on' : ''}">${b}</span>`).join('');
+            return `<div class="bit-group ${cls}"><div class="bits">${bitsHtml}</div><div class="label">${label}</div></div>`;
+        }
+
+        renderFrame();
+
+        /* ===== Section 8: Heartbeat demo ===== */
+        let hbRunning = false;
+        let hbTimers = [];
+        let hbReconnectAttempt = 0;
+
+        function clearHbTimers() {
+            hbTimers.forEach(t => clearTimeout(t));
+            hbTimers = [];
+        }
+
+        function startHeartbeat() {
+            if (hbRunning) return;
+            hbRunning = true;
+            document.getElementById('hbStartBtn').disabled = true;
+            document.getElementById('hbStartBtn').textContent = '运行中…';
+            runHeartbeatCycle();
+        }
+
+        function runHeartbeatCycle() {
+            const enabled = document.getElementById('hbToggle').checked;
+            const status = document.getElementById('hbStatus');
+            const ping = document.getElementById('hbPing');
+            const pong = document.getElementById('hbPong');
+            const client = document.getElementById('hbClient');
+            const server = document.getElementById('hbServer');
+
+            if (!enabled) {
+                status.innerHTML = '<span class="reconnecting">⚠ 心跳已禁用，无法检测连接状态</span>';
+                hbTimers.push(setTimeout(() => {
+                    if (hbRunning) simulateDropAndReconnect();
+                }, 3000));
+                return;
+            }
+
+            status.innerHTML = '<span class="connected">● 连接正常 · 发送 PING 心跳</span>';
+            ping.classList.remove('fly');
+            pong.classList.remove('fly');
+            // Trigger reflow to restart animation
+            void ping.offsetWidth;
+            ping.classList.add('fly');
+
+            hbTimers.push(setTimeout(() => {
+                pong.classList.add('fly');
+                status.innerHTML = '<span class="connected">● 收到 PONG · 连接保持活跃</span>';
+            }, 700));
+
+            // After 3 normal cycles, simulate a drop
+            hbTimers.push(setTimeout(() => {
+                if (hbRunning) simulateDropAndReconnect();
+            }, 2400));
+        }
+
+        function simulateDropAndReconnect() {
+            const status = document.getElementById('hbStatus');
+            const client = document.getElementById('hbClient');
+            const server = document.getElementById('hbServer');
+            hbReconnectAttempt = 0;
+
+            status.innerHTML = '<span class="reconnecting">❌ 连接丢失！PONG 超时未响应</span>';
+            client.classList.add('dropped');
+            server.classList.add('dropped');
+
+            attemptReconnect();
+        }
+
+        function attemptReconnect() {
+            const status = document.getElementById('hbStatus');
+            const client = document.getElementById('hbClient');
+            const server = document.getElementById('hbServer');
+            const delay = Math.min(1000 * Math.pow(2, hbReconnectAttempt), 8000);
+            const delaySec = (delay / 1000).toFixed(1);
+
+            status.innerHTML = `<span class="reconnecting">⏳ 指数退避重连 · 第 ${hbReconnectAttempt + 1} 次 · 等待 <span class="countdown">${delaySec}s</span></span>`;
+
+            // Countdown
+            let remaining = delay;
+            const countdownTimer = setInterval(() => {
+                remaining -= 100;
+                if (remaining <= 0) { clearInterval(countdownTimer); return; }
+                status.innerHTML = `<span class="reconnecting">⏳ 指数退避重连 · 第 ${hbReconnectAttempt + 1} 次 · 等待 <span class="countdown">${(remaining/1000).toFixed(1)}s</span></span>`;
+            }, 100);
+            hbTimers.push(countdownTimer);
+
+            hbTimers.push(setTimeout(() => {
+                clearInterval(countdownTimer);
+                hbReconnectAttempt++;
+                if (hbReconnectAttempt >= 3) {
+                    // Reconnect succeeds
+                    status.innerHTML = '<span class="connected">✅ 重连成功！恢复心跳循环</span>';
+                    client.classList.remove('dropped');
+                    server.classList.remove('dropped');
+                    hbTimers.push(setTimeout(() => {
+                        if (hbRunning) runHeartbeatCycle();
+                    }, 1500));
+                } else {
+                    attemptReconnect();
+                }
+            }, delay));
+        }
+
+        /* ===== Section 9: Code tabs ===== */
+        function switchCodeTab(name) {
+            document.querySelectorAll('.code-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+            document.querySelectorAll('.code-panel').forEach(p => p.classList.toggle('active', p.id === 'code-' + name));
+        }
+
+        function copyCode(btn) {
+            const block = btn.parentElement;
+            const text = block.innerText.replace(/^复制\s*/, '').replace(/\n\d+\s/g, '\n');
+            navigator.clipboard.writeText(text).then(() => {
+                const orig = btn.textContent;
+                btn.textContent = '✓ 已复制';
+                setTimeout(() => { btn.textContent = orig; }, 1500);
+            }).catch(() => {
+                btn.textContent = '复制失败';
+                setTimeout(() => { btn.textContent = '复制'; }, 1500);
+            });
+        }
+
+        /* ===== Cleanup on unload ===== */
+        window.addEventListener('beforeunload', () => {
+            if (ws) try { ws.close(); } catch (e) {}
+            clearHbTimers();
+        });
+    </script>
+</body>
+</html>
