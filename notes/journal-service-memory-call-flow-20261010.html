@@ -833,8 +833,54 @@ FC、云端拉数、Collector 和 Memory 查询主链路没有变化。
 <div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="sim.writer.run(params)" data-step="0">sim.writer.run(params)</div></div><ul class="am-tree-list"><li data-key="load_exp()" data-step="1"><span class="am-tree-label">load_exp()</span><span class="am-tree-sub">读 meta.json 和日期列表</span></li><li data-key="write_day()" data-step="2"><span class="am-tree-label">write_day()</span><span class="am-tree-sub">逐天 INSERT IGNORE</span></li><li data-key="update_cursor()" data-step="3"><span class="am-tree-label">update_cursor()</span><span class="am-tree-sub">记录本实验已写日期</span></li></ul></div>
 <div class="am-md"><p><strong>③ journal：记忆加工与导出</strong></p>
 </div>
-<div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="sim.journal.run(params)" data-step="0">sim.journal.run(params)</div></div><ul class="am-tree-list"><li data-key="_validate_params()" data-step="1"><span class="am-tree-label">_validate_params()</span><span class="am-tree-sub">域、用户、设备、模型凭据等校验</span></li><li data-key="JournalService()" data-step="2"><span class="am-tree-label">JournalService()</span><span class="am-tree-sub">注入 source_adapter=adapter，单独创建服务</span></li><li data-key="register_source()" data-step="3"><span class="am-tree-label">register_source()</span><span class="am-tree-sub">登记选定域的 SourceDefinition</span></li><li data-key="SourceCollector.collect()" data-step="4"><span class="am-tree-label">SourceCollector.collect()</span><span class="am-tree-sub">对每个 ready 来源分页采集</span></li><li data-key="_snapshot_source()" data-step="5"><span class="am-tree-label">_snapshot_source()</span><span class="am-tree-sub">从来源表扫描历史快照</span></li><li data-key="reconcile_scope()" data-step="6"><span class="am-tree-label">reconcile_scope()</span><span class="am-tree-sub">SourceReconciler；按设备和自然日对账</span></li><li data-key="process_pending_jobs(limit=10)" data-step="7"><span class="am-tree-label">process_pending_jobs(limit=10)</span><span class="am-tree-sub">循环直到当前无可领取任务</span><ul><li data-key="_process_day_job(job)" data-step="8"><span class="am-tree-label">_process_day_job(job)</span><span class="am-tree-sub">执行一个日级任务，详见 E、F</span></li></ul></li><li data-key="生命周期维护" data-step="9"><span class="am-tree-label">生命周期维护</span><span class="am-tree-sub">run_entity_lifecycle_maintenance()；仅 lifecycle=true</span></li><li data-key="consolidate_all()" data-step="10"><span class="am-tree-label">consolidate_all()</span><span class="am-tree-sub">未设置 skip_consolidate 时执行</span></li><li data-key="assemble_memory()" data-step="11"><span class="am-tree-label">assemble_memory()</span><span class="am-tree-sub">每设备和用户级只读查询</span></li><li data-key="导出 JSON" data-step="12"><span class="am-tree-label">导出 JSON</span><span class="am-tree-sub">journals / memory / evidence / run</span></li></ul></div>
-<div class="am-md"><p>prepare → writer → journal 在同一次 FC 调用内串行执行。
+<div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="sim.journal.run(params)" data-step="0">sim.journal.run(params)</div></div><ul class="am-tree-list"><li data-key="_validate_params()" data-step="1"><span class="am-tree-label">_validate_params()</span><span class="am-tree-sub">域、用户、设备、模型凭据等校验</span></li><li data-key="UserBoundSourceAdapter()" data-step="2"><span class="am-tree-label">UserBoundSourceAdapter()</span><span class="am-tree-sub">创建 adapter，继承 MySQLPollingSourceAdapter</span><ul><li data-key="连接解析器" data-step="3"><span class="am-tree-label">连接解析器</span><span class="am-tree-sub">_connection_resolver；按 connection_ref 连接来源库</span></li><li data-key="设备用户绑定" data-step="4"><span class="am-tree-label">设备用户绑定</span><span class="am-tree-sub">binding={sn: user_id for sn in device_sns}</span></li><li data-key="首次扫描起点" data-step="5"><span class="am-tree-label">首次扫描起点</span><span class="am-tree-sub">since=cfg[&quot;since&quot;]；已有 checkpoint 时按游标回扫</span></li></ul></li><li data-key="JournalService()" data-step="6"><span class="am-tree-label">JournalService()</span><span class="am-tree-sub">注入 source_adapter=adapter，单独创建服务</span></li><li data-key="register_source()" data-step="7"><span class="am-tree-label">register_source()</span><span class="am-tree-sub">登记选定域的 SourceDefinition</span></li><li data-key="SourceCollector()" data-step="8"><span class="am-tree-label">SourceCollector()</span><span class="am-tree-sub">传入 service.repo、同一 adapter 和 page_size=100</span><ul><li data-key="collect(source)" data-step="9"><span class="am-tree-label">collect(source)</span><span class="am-tree-sub">对每个 ready 来源分页采集</span><ul><li data-key="stable_upper_bound()" data-step="10"><span class="am-tree-label">stable_upper_bound()</span><span class="am-tree-sub">Collector 调 adapter，取得扫描时间上界</span></li><li data-key="fetch_page()" data-step="11"><span class="am-tree-label">fetch_page()</span><span class="am-tree-sub">Collector 调 adapter，逐页读取来源表</span></li></ul></li></ul></li><li data-key="_snapshot_source()" data-step="12"><span class="am-tree-label">_snapshot_source()</span><span class="am-tree-sub">同一 adapter 扫描来源历史快照，再交给对账器</span></li><li data-key="reconcile_scope()" data-step="13"><span class="am-tree-label">reconcile_scope()</span><span class="am-tree-sub">SourceReconciler；按设备和自然日对账</span></li><li data-key="process_pending_jobs(limit=10)" data-step="14"><span class="am-tree-label">process_pending_jobs(limit=10)</span><span class="am-tree-sub">循环直到当前无可领取任务</span><ul><li data-key="_process_day_job(job)" data-step="15"><span class="am-tree-label">_process_day_job(job)</span><span class="am-tree-sub">执行一个日级任务，详见 E、F</span></li></ul></li><li data-key="生命周期维护" data-step="16"><span class="am-tree-label">生命周期维护</span><span class="am-tree-sub">run_entity_lifecycle_maintenance()；仅 lifecycle=true</span></li><li data-key="consolidate_all()" data-step="17"><span class="am-tree-label">consolidate_all()</span><span class="am-tree-sub">未设置 skip_consolidate 时执行</span></li><li data-key="assemble_memory()" data-step="18"><span class="am-tree-label">assemble_memory()</span><span class="am-tree-sub">每设备和用户级只读查询</span></li><li data-key="导出 JSON" data-step="19"><span class="am-tree-label">导出 JSON</span><span class="am-tree-sub">journals / memory / evidence / run</span></li></ul></div>
+<div class="am-md"><p><strong>adapter 在这里连接哪两部分？</strong>
+它连接 Collector 和来源 MySQL，不连接 FC 和云端视频接口。
+writer 先把 prepare 数据写进动态表，adapter 再从表中读出。
+adapter 按设备过滤，给 vision 行补 user_id，并清洗 SQL 字段值。
+首次读取可用 since；后续读取使用 checkpoint 和分页游标。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>对象</th>
+<th>负责什么</th>
+<th>不负责什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SourceDefinition</td>
+<td>指定表、字段映射、时间列和 connection_ref</td>
+<td>不自行连接数据库</td>
+</tr>
+<tr>
+<td>_connection_resolver</td>
+<td>把 dev_algorithm 解析为来源库连接</td>
+<td>不确定采集游标，不保存记忆</td>
+</tr>
+<tr>
+<td>UserBoundSourceAdapter</td>
+<td>读取上界与来源行，做设备过滤及用户绑定</td>
+<td>不下载云端 JSON，不写日记</td>
+</tr>
+<tr>
+<td>SourceCollector</td>
+<td>调用 adapter、映射行、去重和推进 checkpoint</td>
+<td>不生成实体语义或日记摘要</td>
+</tr>
+<tr>
+<td>service.repo</td>
+<td>保存来源修订、Job、checkpoint 等记忆账本</td>
+<td>不代替来源 adapter 拉取动态表</td>
+</tr>
+</tbody></table></div>
+<p>同一个 adapter 既注入 JournalService，也直接传给 SourceCollector。
+当前 sim 直接创建 Collector，不绕经 service.collect_sources()。
+快照读取也复用 adapter，但对账由 SourceReconciler 执行。
+默认 FC <code>_svc()</code> 没有 adapter，不影响这条独立创建的 sim 服务。</p>
+<p>创建与传递：<code>sim/journal.py:506</code>、<code>:511</code>、<code>:541</code>、<code>:560</code>。
+读取逻辑：<code>sim/journal.py:117</code>、<code>:219</code>、<code>sources/mysql_adapter.py:26</code>。
+Collector 调用：<code>sources/collector.py:55</code>、<code>:64</code>。</p>
+<p>prepare → writer → journal 在同一次 FC 调用内串行执行。
 <code>sim_pipeline</code> 缺少 user_id 时直接返回错误。
 prepare 没有可写日期时，跳过 writer，但仍执行 journal。
 因此“无新视频”不等于“本次不会处理任何任务”。</p>
@@ -2034,7 +2080,7 @@ Worker 用该日全部有效证据生成新日日记修订和 lineage。</p>
 <div class="am-lightbox-canvas am-diagram"></div>
 </div>
 </div>
-<footer class="am-colophon">Generated by <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">Answer me with HTML</a> 0.4.15 · 2026-10-10 15:53</footer>
+<footer class="am-colophon">Generated by <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">Answer me with HTML</a> 0.4.15 · 2026-10-10 16:34</footer>
 <textarea id="am-source" hidden readonly aria-hidden="true">---
 title: 从 FC 入口到记忆沉淀的完整调用流程
 subtitle: 函数怎么调用，何时读什么数据，中间产物代表什么，最后交付什么
@@ -2145,10 +2191,17 @@ sim.writer.run(params)
 ```tree list
 sim.journal.run(params)
   _validate_params() | 域、用户、设备、模型凭据等校验
+  UserBoundSourceAdapter() | 创建 adapter，继承 MySQLPollingSourceAdapter
+    连接解析器 | _connection_resolver；按 connection_ref 连接来源库
+    设备用户绑定 | binding={sn: user_id for sn in device_sns}
+    首次扫描起点 | since=cfg[&quot;since&quot;]；已有 checkpoint 时按游标回扫
   JournalService() | 注入 source_adapter=adapter，单独创建服务
   register_source() | 登记选定域的 SourceDefinition
-  SourceCollector.collect() | 对每个 ready 来源分页采集
-  _snapshot_source() | 从来源表扫描历史快照
+  SourceCollector() | 传入 service.repo、同一 adapter 和 page_size=100
+    collect(source) | 对每个 ready 来源分页采集
+      stable_upper_bound() | Collector 调 adapter，取得扫描时间上界
+      fetch_page() | Collector 调 adapter，逐页读取来源表
+  _snapshot_source() | 同一 adapter 扫描来源历史快照，再交给对账器
   reconcile_scope() | SourceReconciler；按设备和自然日对账
   process_pending_jobs(limit=10) | 循环直到当前无可领取任务
     _process_day_job(job) | 执行一个日级任务，详见 E、F
@@ -2157,6 +2210,29 @@ sim.journal.run(params)
   assemble_memory() | 每设备和用户级只读查询
   导出 JSON | journals / memory / evidence / run
 ```
+
+**adapter 在这里连接哪两部分？**
+它连接 Collector 和来源 MySQL，不连接 FC 和云端视频接口。
+writer 先把 prepare 数据写进动态表，adapter 再从表中读出。
+adapter 按设备过滤，给 vision 行补 user_id，并清洗 SQL 字段值。
+首次读取可用 since；后续读取使用 checkpoint 和分页游标。
+
+| 对象 | 负责什么 | 不负责什么 |
+| --- | --- | --- |
+| SourceDefinition | 指定表、字段映射、时间列和 connection_ref | 不自行连接数据库 |
+| _connection_resolver | 把 dev_algorithm 解析为来源库连接 | 不确定采集游标，不保存记忆 |
+| UserBoundSourceAdapter | 读取上界与来源行，做设备过滤及用户绑定 | 不下载云端 JSON，不写日记 |
+| SourceCollector | 调用 adapter、映射行、去重和推进 checkpoint | 不生成实体语义或日记摘要 |
+| service.repo | 保存来源修订、Job、checkpoint 等记忆账本 | 不代替来源 adapter 拉取动态表 |
+
+同一个 adapter 既注入 JournalService，也直接传给 SourceCollector。
+当前 sim 直接创建 Collector，不绕经 service.collect_sources()。
+快照读取也复用 adapter，但对账由 SourceReconciler 执行。
+默认 FC `_svc()` 没有 adapter，不影响这条独立创建的 sim 服务。
+
+创建与传递：`sim/journal.py:506`、`:511`、`:541`、`:560`。
+读取逻辑：`sim/journal.py:117`、`:219`、`sources/mysql_adapter.py:26`。
+Collector 调用：`sources/collector.py:55`、`:64`。
 
 prepare → writer → journal 在同一次 FC 调用内串行执行。
 `sim_pipeline` 缺少 user_id 时直接返回错误。
