@@ -726,7 +726,7 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 <button class="am-btn" type="button" data-am="copy" data-done="已复制 ✓">复制源稿</button>
 </div>
 <main class="am-doc">
-<header class="am-head"><h1>从 FC 入口到记忆沉淀的完整调用流程</h1><p class="am-sub">函数怎么调用，何时读什么数据，中间产物代表什么，最后交付什么</p><div class="am-head-meta"><span><b>date</b>2026-10-10</span><span><b>scope</b>当前仓库代码；以 sim_pipeline 的 vision 主链路为主</span></div></header>
+<header class="am-head"><h1>从 FC 入口到记忆沉淀的完整调用流程</h1><p class="am-sub">函数怎么调用，何时读什么数据，中间产物代表什么，最后交付什么</p><div class="am-head-meta"><span><b>date</b>2026-10-10</span><span><b>scope</b>当前仓库代码；以 sim_pipeline 的 vision 主链路为主</span><span><b>revision</b>dev / 700d8ca</span></div></header>
 <div class="am-doc-layout">
 <nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 整个系统最终在做什么</a><a href="#panel-B">B · 从 FC 开始，函数按什么顺序调用</a><a href="#panel-C">C · 什么时候拉取什么数据</a><a href="#panel-D">D · 拉回来的数据如何第一次沉淀</a><a href="#panel-E">E · Worker 如何产生实体和各种中间语义数据</a><a href="#panel-F">F · 这些数据如何生成可追溯的日日记</a><a href="#panel-G">G · 日级结果如何沉淀成长期记忆与画像</a><a href="#panel-H">H · 最后生成哪些成果，如何交给调用方</a></nav><div class="am-doc-body">
 <section class="am-panel" id="panel-A">
@@ -774,11 +774,66 @@ chat 对应 R2，作用域是用户，内部设备键使用 <code>_</code>。
 <p>这是按源码整理的调用图，不是某次云端调用的真实运行轨迹。
 开关、依赖失败和空数据会改变实际执行分支。
 本次没有连接云端或读写业务数据库。</p>
+<p><strong>本次同步到 dev 的 700d8ca。</strong>
+对比基线为 5da4c23，新增变化来自 d7a2629 和 700d8ca。
+FC、云端拉数、Collector 和 Memory 查询主链路没有变化。
+变化集中在语义判断，不是替换整套存储或采集架构。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>最新变化</th>
+<th>对调用流程的影响</th>
+<th>本页位置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>类型与事件分类改为 LLM 优先</td>
+<td>同一文本标注同时供实体匹配和事件校准使用</td>
+<td>C、E</td>
+</tr>
+<tr>
+<td>角色、定位描述和固定锚物改由模型主导</td>
+<td>复用文本标注或场景 VLM，不额外单独调用一次</td>
+<td>E</td>
+</tr>
+<tr>
+<td>图片排序与图文冲突增加文本裁决</td>
+<td>分块复核前排序，生成后按主张约束证据</td>
+<td>F</td>
+</tr>
+<tr>
+<td>节律异常和关怀提醒增加文本裁决</td>
+<td>规则先筛候选，模型再保留、抑制或改写</td>
+<td>E</td>
+</tr>
+<tr>
+<td>家庭车辆类别增加文本裁决</td>
+<td>画像刷新时批量归类，再按类别聚合车辆</td>
+<td>G</td>
+</tr>
+</tbody></table></div>
+<p>本地代码版本不证明 FC 已部署同一版本。
+本次只更新文档，不重新打包或部署云端函数。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-B">
 <header class="am-panel-head"><span class="am-panel-id">B</span><h2>从 FC 开始，函数按什么顺序调用</h2></header>
-<div class="am-panel-body"><div class="am-tree"><div class="am-tree-root"><div class="am-tree-box am-tree-box--root" data-key="journal_service.api.fc_handler.handler(event, context)" data-step="0">journal_service.api.fc_handler.handler(event, context)</div></div><div class="am-tree-cols" style="--n: 4"><div class="am-tree-col"><div class="am-tree-box" data-key="解析 bytes / str JSON" data-step="1">解析 bytes / str JSON<small>FC 事件转成字典</small></div></div><div class="am-tree-col"><div class="am-tree-box" data-key="Timer 解包 payload" data-step="2">Timer 解包 payload<small>未指定 action 时默认 consolidate_all</small></div></div><div class="am-tree-col"><div class="am-tree-box" data-key="HTTP 信封分流" data-step="3">HTTP 信封分流<small>有 path 或 method 时进入 _handle_http</small></div></div><div class="am-tree-col"><div class="am-tree-box" data-key="_handle_event(event)" data-step="4">_handle_event(event)<small>根据 action 分发</small></div><ul class="am-tree-list"><li data-key="_handle_sim_action(action, event)" data-step="5"><span class="am-tree-label">_handle_sim_action(action, event)</span><span class="am-tree-sub">sim action 提前分流，不调用 _svc()</span><ul><li data-key="_run_sim_pipeline(prepare, writer, journal, params)" data-step="6"><span class="am-tree-label">_run_sim_pipeline(prepare, writer, journal, params)</span><ul><li data-key="sim.prepare.run(params)" data-step="7"><span class="am-tree-label">sim.prepare.run(params)</span><span class="am-tree-sub">① 云端拉数和按天落盘</span><ul><li data-key="_apply_cloud_env()" data-step="8"><span class="am-tree-label">_apply_cloud_env()</span><span class="am-tree-sub">配置视频接口使用的运行时环境</span></li><li data-key="_resolve_device_sns()" data-step="9"><span class="am-tree-label">_resolve_device_sns()</span><span class="am-tree-sub">显式设备优先，否则拉设备列表</span></li><li data-key="downloader.collect_device_videos()" data-step="10"><span class="am-tree-label">downloader.collect_device_videos()</span><span class="am-tree-sub">逐设备拉视频描述与详情</span></li><li data-key="map_to_table_row()" data-step="11"><span class="am-tree-label">map_to_table_row()</span><span class="am-tree-sub">生成动态表字段</span></li><li data-key="_select_latest_window()" data-step="12"><span class="am-tree-label">_select_latest_window()</span><span class="am-tree-sub">可选保留最近自然日</span></li></ul></li><li data-key="sim.writer.run(params)" data-step="13"><span class="am-tree-label">sim.writer.run(params)</span><span class="am-tree-sub">② 把准备数据写入动态表</span><ul><li data-key="load_exp()" data-step="14"><span class="am-tree-label">load_exp()</span><span class="am-tree-sub">读 meta.json 和日期列表</span></li><li data-key="write_day()" data-step="15"><span class="am-tree-label">write_day()</span><span class="am-tree-sub">逐天 INSERT IGNORE</span></li><li data-key="update_cursor()" data-step="16"><span class="am-tree-label">update_cursor()</span><span class="am-tree-sub">记录本实验已写日期</span></li></ul></li><li data-key="sim.journal.run(params)" data-step="17"><span class="am-tree-label">sim.journal.run(params)</span><span class="am-tree-sub">③ 记忆加工与导出</span><ul><li data-key="_validate_params()" data-step="18"><span class="am-tree-label">_validate_params()</span><span class="am-tree-sub">域、用户、设备、模型凭据等校验</span></li><li data-key="JournalService(..., source_adapter=adapter)" data-step="19"><span class="am-tree-label">JournalService(..., source_adapter=adapter)</span><span class="am-tree-sub">单独创建服务</span></li><li data-key="register_source()" data-step="20"><span class="am-tree-label">register_source()</span><span class="am-tree-sub">登记选定域的 SourceDefinition</span></li><li data-key="SourceCollector.collect()" data-step="21"><span class="am-tree-label">SourceCollector.collect()</span><span class="am-tree-sub">对每个 ready 来源分页采集</span></li><li data-key="_snapshot_source()" data-step="22"><span class="am-tree-label">_snapshot_source()</span><span class="am-tree-sub">从来源表扫描历史快照</span></li><li data-key="SourceReconciler.reconcile_scope()" data-step="23"><span class="am-tree-label">SourceReconciler.reconcile_scope()</span><span class="am-tree-sub">按设备和自然日对账</span></li><li data-key="process_pending_jobs(limit=10)" data-step="24"><span class="am-tree-label">process_pending_jobs(limit=10)</span><span class="am-tree-sub">循环直到当前无可领取任务</span><ul><li data-key="_process_day_job(job)" data-step="25"><span class="am-tree-label">_process_day_job(job)</span><span class="am-tree-sub">执行一个日级任务，详见 E、F</span></li></ul></li><li data-key="run_entity_lifecycle_maintenance()" data-step="26"><span class="am-tree-label">run_entity_lifecycle_maintenance()</span><span class="am-tree-sub">仅 lifecycle=true 时执行</span></li><li data-key="consolidate_all()" data-step="27"><span class="am-tree-label">consolidate_all()</span><span class="am-tree-sub">未设置 skip_consolidate 时执行</span></li><li data-key="assemble_memory()" data-step="28"><span class="am-tree-label">assemble_memory()</span><span class="am-tree-sub">每设备和用户级只读查询</span></li><li data-key="导出 journals / memory / evidence / run JSON" data-step="29"><span class="am-tree-label">导出 journals / memory / evidence / run JSON</span></li></ul></li></ul></li></ul></li></ul></div></div></div>
+<div class="am-panel-body"><div class="am-md"><p><strong>入口解析与分流</strong>
+入口文件是 <code>journal_service/api/fc_handler.py</code>。</p>
+</div>
+<div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="handler(event, context)" data-step="0">handler(event, context)</div></div><ul class="am-tree-list"><li data-key="解析 bytes / str JSON" data-step="1"><span class="am-tree-label">解析 bytes / str JSON</span><span class="am-tree-sub">FC 事件转成字典</span></li><li data-key="Timer 解包 payload" data-step="2"><span class="am-tree-label">Timer 解包 payload</span><span class="am-tree-sub">未指定 action 时默认 consolidate_all</span></li><li data-key="HTTP 信封分流" data-step="3"><span class="am-tree-label">HTTP 信封分流</span><span class="am-tree-sub">有 path 或 method 时进入 _handle_http</span></li><li data-key="_handle_event(event)" data-step="4"><span class="am-tree-label">_handle_event(event)</span><span class="am-tree-sub">根据 action 分发</span></li></ul></div>
+<div class="am-md"><p>sim 事件依次进入 <code>_handle_sim_action()</code> 和 <code>_run_sim_pipeline()</code>。
+这条分支提前分流，不调用默认 <code>_svc()</code>。
+<code>_run_sim_pipeline(prepare, writer, journal, params)</code> 串行调用三个阶段。</p>
+<p><strong>① prepare：云端拉数和按天落盘</strong></p>
+</div>
+<div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="sim.prepare.run(params)" data-step="0">sim.prepare.run(params)</div></div><ul class="am-tree-list"><li data-key="_apply_cloud_env()" data-step="1"><span class="am-tree-label">_apply_cloud_env()</span><span class="am-tree-sub">配置视频接口使用的运行时环境</span></li><li data-key="_resolve_device_sns()" data-step="2"><span class="am-tree-label">_resolve_device_sns()</span><span class="am-tree-sub">显式设备优先，否则拉设备列表</span></li><li data-key="collect_device_videos()" data-step="3"><span class="am-tree-label">collect_device_videos()</span><span class="am-tree-sub">downloader 模块；逐设备拉视频描述与详情</span></li><li data-key="map_to_table_row()" data-step="4"><span class="am-tree-label">map_to_table_row()</span><span class="am-tree-sub">生成动态表字段</span></li><li data-key="_select_latest_window()" data-step="5"><span class="am-tree-label">_select_latest_window()</span><span class="am-tree-sub">可选保留最近自然日</span></li></ul></div>
+<div class="am-md"><p><strong>② writer：把准备数据写入动态表</strong></p>
+</div>
+<div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="sim.writer.run(params)" data-step="0">sim.writer.run(params)</div></div><ul class="am-tree-list"><li data-key="load_exp()" data-step="1"><span class="am-tree-label">load_exp()</span><span class="am-tree-sub">读 meta.json 和日期列表</span></li><li data-key="write_day()" data-step="2"><span class="am-tree-label">write_day()</span><span class="am-tree-sub">逐天 INSERT IGNORE</span></li><li data-key="update_cursor()" data-step="3"><span class="am-tree-label">update_cursor()</span><span class="am-tree-sub">记录本实验已写日期</span></li></ul></div>
+<div class="am-md"><p><strong>③ journal：记忆加工与导出</strong></p>
+</div>
+<div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="sim.journal.run(params)" data-step="0">sim.journal.run(params)</div></div><ul class="am-tree-list"><li data-key="_validate_params()" data-step="1"><span class="am-tree-label">_validate_params()</span><span class="am-tree-sub">域、用户、设备、模型凭据等校验</span></li><li data-key="JournalService()" data-step="2"><span class="am-tree-label">JournalService()</span><span class="am-tree-sub">注入 source_adapter=adapter，单独创建服务</span></li><li data-key="register_source()" data-step="3"><span class="am-tree-label">register_source()</span><span class="am-tree-sub">登记选定域的 SourceDefinition</span></li><li data-key="SourceCollector.collect()" data-step="4"><span class="am-tree-label">SourceCollector.collect()</span><span class="am-tree-sub">对每个 ready 来源分页采集</span></li><li data-key="_snapshot_source()" data-step="5"><span class="am-tree-label">_snapshot_source()</span><span class="am-tree-sub">从来源表扫描历史快照</span></li><li data-key="reconcile_scope()" data-step="6"><span class="am-tree-label">reconcile_scope()</span><span class="am-tree-sub">SourceReconciler；按设备和自然日对账</span></li><li data-key="process_pending_jobs(limit=10)" data-step="7"><span class="am-tree-label">process_pending_jobs(limit=10)</span><span class="am-tree-sub">循环直到当前无可领取任务</span><ul><li data-key="_process_day_job(job)" data-step="8"><span class="am-tree-label">_process_day_job(job)</span><span class="am-tree-sub">执行一个日级任务，详见 E、F</span></li></ul></li><li data-key="生命周期维护" data-step="9"><span class="am-tree-label">生命周期维护</span><span class="am-tree-sub">run_entity_lifecycle_maintenance()；仅 lifecycle=true</span></li><li data-key="consolidate_all()" data-step="10"><span class="am-tree-label">consolidate_all()</span><span class="am-tree-sub">未设置 skip_consolidate 时执行</span></li><li data-key="assemble_memory()" data-step="11"><span class="am-tree-label">assemble_memory()</span><span class="am-tree-sub">每设备和用户级只读查询</span></li><li data-key="导出 JSON" data-step="12"><span class="am-tree-label">导出 JSON</span><span class="am-tree-sub">journals / memory / evidence / run</span></li></ul></div>
 <div class="am-md"><p>prepare → writer → journal 在同一次 FC 调用内串行执行。
 <code>sim_pipeline</code> 缺少 user_id 时直接返回错误。
 prepare 没有可写日期时，跳过 writer，但仍执行 journal。
@@ -851,7 +906,8 @@ sim_pipeline 事件分支不走这份 HTTP 令牌校验。
 <div class="am-panel-body"><div class="am-md"><p>这里需要区分三种“拉取”。
 第一种从云平台和 OSS 获取新输入。
 第二种从 MySQL 读取来源及历史记忆。
-第三种把关键帧送给模型，得到定位、向量或复核结果。</p>
+第三种把关键帧送给模型，得到定位、向量或复核结果。
+新增文本裁决只读取结构化文本，不等于又下载一遍图片。</p>
 <div class="am-table-wrap"><table>
 <thead>
 <tr>
@@ -922,6 +978,12 @@ sim_pipeline 事件分支不走这份 HTTP 令牌校验。
 <td>任务触发修订，以及该日全部当前有效记录</td>
 </tr>
 <tr>
+<td>Worker 取得当日来源后</td>
+<td><code>extract_roles()</code></td>
+<td>文本模型；启用时先读角色缓存</td>
+<td>types、motions、zone、role、target；不读取图片</td>
+</tr>
+<tr>
 <td>实体匹配开始及样本比较时</td>
 <td><code>list_observations()</code>、实体和样本访问器</td>
 <td>Entity、Observation、Sample 表</td>
@@ -940,10 +1002,22 @@ sim_pipeline 事件分支不走这份 HTTP 令牌校验。
 <td>场景主档、当日缓存结论或新的视觉场景结论</td>
 </tr>
 <tr>
+<td>每个日记分块复核前，有带图记录</td>
+<td><code>ImageReviewer._select()</code> → <code>_llm_rank()</code></td>
+<td>文本模型</td>
+<td>根据标题和描述返回 0–10 的复核价值分；此时不读图</td>
+</tr>
+<tr>
 <td>日记分块生成时</td>
 <td><code>ImageReviewer.review_with_ledger()</code></td>
 <td>图片签名接口和视觉模型</td>
 <td>有预算的图片逐项复核结果</td>
+</tr>
+<tr>
+<td>图片否定主张且有待匹配文本</td>
+<td><code>_enforce_image_evidence()</code> → <code>_claim_match_resolver()</code></td>
+<td>文本模型</td>
+<td>主张与日记条目是否描述同一事实；不是再次看图</td>
 </tr>
 <tr>
 <td>规律与成熟度分析时</td>
@@ -952,10 +1026,28 @@ sim_pipeline 事件分支不走这份 HTTP 令牌校验。
 <td>多日活动分布、覆盖与事件确认比例</td>
 </tr>
 <tr>
+<td>规则产生节律异常候选后</td>
+<td><code>_adjudicate_anomalies()</code></td>
+<td>文本模型</td>
+<td>keep、severity、note；无候选时不调用</td>
+</tr>
+<tr>
+<td>日记生成后，规则产生关怀候选</td>
+<td><code>build_care_attention()</code> → <code>_adjudicate_candidates()</code></td>
+<td>文本模型</td>
+<td>emit、severity、note；无候选时不调用</td>
+</tr>
+<tr>
 <td>家庭画像刷新时</td>
 <td><code>refresh_user_profile()</code></td>
 <td>用户全部设备实体及同帧观察</td>
 <td>常驻成员、外观、物种票与数量估计依据</td>
+</tr>
+<tr>
+<td>画像刷新时存在车辆实体</td>
+<td><code>_annotate_vehicle_categories()</code></td>
+<td>文本模型</td>
+<td>根据 semantic 与 appearance 返回车辆类别</td>
 </tr>
 <tr>
 <td>周期补压时</td>
@@ -1210,7 +1302,7 @@ process 模式会把已领取 Job 交给独立子进程。
 失败则延迟一分钟回到 pending；累计领取至少五次后进入 dlq。
 本轮暂时没有可领取 Job，就会结束循环，不等待所有延迟任务。</p>
 </div>
-<div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="JournalService._process_day_job(job)" data-step="0">JournalService._process_day_job(job)</div></div><ul class="am-tree-list"><li data-key="get_source_revision(revision_id)" data-step="1"><span class="am-tree-label">get_source_revision(revision_id)</span><span class="am-tree-sub">确认触发任务的证据存在</span></li><li data-key="list_current_source_records(domain, user, device, day)" data-step="2"><span class="am-tree-label">list_current_source_records(domain, user, device, day)</span><span class="am-tree-sub">取该日全部当前有效记录</span></li><li data-key="extract_roles(llm, source_revisions)" data-step="3"><span class="am-tree-label">extract_roles(llm, source_revisions)</span><span class="am-tree-sub">批量文本多标签，失败回退词表</span></li><li data-key="EntityMatcher.match_scope()" data-step="4"><span class="am-tree-label">EntityMatcher.match_scope()</span><span class="am-tree-sub">vision 且匹配开关开启</span><ul><li data-key="extract_candidates()" data-step="5"><span class="am-tree-label">extract_candidates()</span><span class="am-tree-sub">实体类型、外观、动作、方位候选</span></li><li data-key="ReIDModule.prepare_frame_embeddings()" data-step="6"><span class="am-tree-label">ReIDModule.prepare_frame_embeddings()</span><span class="am-tree-sub">按需图片定位、裁剪、向量</span></li><li data-key="文本与视觉匹配" data-step="7"><span class="am-tree-label">文本与视觉匹配</span><span class="am-tree-sub">关联已有实体或创建匿名实体</span></li><li data-key="persist_entity_match_scope()" data-step="8"><span class="am-tree-label">persist_entity_match_scope()</span><span class="am-tree-sub">同事务保存实体、Observation、样本</span></li></ul></li><li data-key="calibrate_events() → sync_calibrated_events()" data-step="9"><span class="am-tree-label">calibrate_events() → sync_calibrated_events()</span><span class="am-tree-sub">vision 的事件去重和修订</span></li><li data-key="_update_activity_logs()" data-step="10"><span class="am-tree-label">_update_activity_logs()</span><span class="am-tree-sub">按开关更新实体单日活动和基线</span></li><li data-key="run_statistical_correction()" data-step="11"><span class="am-tree-label">run_statistical_correction()</span><span class="am-tree-sub">按开关合并或拆分实体碎片</span></li><li data-key="build_time_slot_profile()" data-step="12"><span class="am-tree-label">build_time_slot_profile()</span><span class="am-tree-sub">生成晨、午、晚、夜证据分布</span></li><li data-key="_readiness_for_scope()" data-step="13"><span class="am-tree-label">_readiness_for_scope()</span><span class="am-tree-sub">查询已有日记，评估历史是否够用</span></li><li data-key="SceneProfiler.profile_scope()" data-step="14"><span class="am-tree-label">SceneProfiler.profile_scope()</span><span class="am-tree-sub">场景主档和当日场景快照</span></li><li data-key="ActivityRhythmProfiler.profile_day()" data-step="15"><span class="am-tree-label">ActivityRhythmProfiler.profile_day()</span><span class="am-tree-sub">跨日规律及当日偏差</span></li><li data-key="JournalWriter.write_day_canonical()" data-step="16"><span class="am-tree-label">JournalWriter.write_day_canonical()</span><span class="am-tree-sub">详见 F</span></li><li data-key="主动感知候选 → apply_attention_cooldown()" data-step="17"><span class="am-tree-label">主动感知候选 → apply_attention_cooldown()</span><span class="am-tree-sub">合并、去重、限额</span></li><li data-key="repo.upsert(journal)" data-step="18"><span class="am-tree-label">repo.upsert(journal)</span><span class="am-tree-sub">原子写入本次日记版本账本</span></li><li data-key="refresh_user_profile()" data-step="19"><span class="am-tree-label">refresh_user_profile()</span><span class="am-tree-sub">vision 收尾，按开关刷新家庭画像</span></li></ul></div>
+<div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="JournalService._process_day_job(job)" data-step="0">JournalService._process_day_job(job)</div></div><ul class="am-tree-list"><li data-key="get_source_revision(revision_id)" data-step="1"><span class="am-tree-label">get_source_revision(revision_id)</span><span class="am-tree-sub">确认触发任务的证据存在</span></li><li data-key="list_current_source_records(domain, user, device, day)" data-step="2"><span class="am-tree-label">list_current_source_records(domain, user, device, day)</span><span class="am-tree-sub">取该日全部当前有效记录</span></li><li data-key="extract_roles(llm, source_revisions)" data-step="3"><span class="am-tree-label">extract_roles(llm, source_revisions)</span><span class="am-tree-sub">types / motions / zone / role / target</span></li><li data-key="EntityMatcher.match_scope()" data-step="4"><span class="am-tree-label">EntityMatcher.match_scope()</span><span class="am-tree-sub">vision 且匹配开关开启</span><ul><li data-key="extract_candidates()" data-step="5"><span class="am-tree-label">extract_candidates()</span><span class="am-tree-sub">非空 LLM 类型集优先，角色与 target 复用标注</span></li><li data-key="build_grounding_query()" data-step="6"><span class="am-tree-label">build_grounding_query()</span><span class="am-tree-sub">优先 target，无有效描述时剥离动作兜底</span></li><li data-key="ReIDModule.prepare_frame_embeddings()" data-step="7"><span class="am-tree-label">ReIDModule.prepare_frame_embeddings()</span><span class="am-tree-sub">按需图片定位、裁剪、向量</span></li><li data-key="文本与视觉匹配" data-step="8"><span class="am-tree-label">文本与视觉匹配</span><span class="am-tree-sub">关联已有实体或创建匿名实体</span></li><li data-key="persist_entity_match_scope()" data-step="9"><span class="am-tree-label">persist_entity_match_scope()</span><span class="am-tree-sub">同事务保存实体、Observation、样本</span></li></ul></li><li data-key="calibrate_events() → sync_calibrated_events()" data-step="10"><span class="am-tree-label">calibrate_events() → sync_calibrated_events()</span><span class="am-tree-sub">类型优先用 LLM，时间窗归并仍由规则执行</span></li><li data-key="_update_activity_logs()" data-step="11"><span class="am-tree-label">_update_activity_logs()</span><span class="am-tree-sub">按开关更新实体单日活动和基线</span></li><li data-key="run_statistical_correction()" data-step="12"><span class="am-tree-label">run_statistical_correction()</span><span class="am-tree-sub">按开关合并或拆分实体碎片</span></li><li data-key="build_time_slot_profile()" data-step="13"><span class="am-tree-label">build_time_slot_profile()</span><span class="am-tree-sub">生成晨、午、晚、夜证据分布</span></li><li data-key="_readiness_for_scope()" data-step="14"><span class="am-tree-label">_readiness_for_scope()</span><span class="am-tree-sub">查询已有日记，评估历史是否够用</span></li><li data-key="SceneProfiler.profile_scope()" data-step="15"><span class="am-tree-label">SceneProfiler.profile_scope()</span><span class="am-tree-sub">VLM fixed 判固定锚物，规则选帧与维护状态</span></li><li data-key="ActivityRhythmProfiler.profile_day()" data-step="16"><span class="am-tree-label">ActivityRhythmProfiler.profile_day()</span><span class="am-tree-sub">统计发现规律，LLM 裁决异常候选</span></li><li data-key="JournalWriter.write_day_canonical()" data-step="17"><span class="am-tree-label">JournalWriter.write_day_canonical()</span><span class="am-tree-sub">详见 F</span></li><li data-key="build_care_attention(..., llm=self.llm)" data-step="18"><span class="am-tree-label">build_care_attention(..., llm=self.llm)</span><span class="am-tree-sub">规则筛关怀候选，LLM 决定提醒与文案</span></li><li data-key="主动感知候选 → apply_attention_cooldown()" data-step="19"><span class="am-tree-label">主动感知候选 → apply_attention_cooldown()</span><span class="am-tree-sub">合并、去重、限额；特定紧急信号不冷却</span></li><li data-key="repo.upsert(journal)" data-step="20"><span class="am-tree-label">repo.upsert(journal)</span><span class="am-tree-sub">原子写入本次日记版本账本</span></li><li data-key="refresh_user_profile()" data-step="21"><span class="am-tree-label">refresh_user_profile()</span><span class="am-tree-sub">vision 收尾，按开关刷新家庭画像</span></li></ul></div>
 <div class="am-md"><p><strong>任务携带的 revision_ids 不是全部生成输入。</strong>
 它们解释为什么要重建；真正输入来自当日全部 current 来源记录。
 这样日记以当前证据重建，不靠反复追加旧模型文本积累。
@@ -1226,15 +1318,15 @@ vision 的 loop_type 是 r1，chat 是 r2。</p>
 </thead>
 <tbody><tr>
 <td>declared_by_revision</td>
-<td>每条文本涉及哪些类型、动作、方位</td>
+<td>types、motions、zone、role、target</td>
 <td>分批文本模型判定；默认每批 40 条，失败回退词表</td>
 <td>内存；配置 TEXT_ROLES_CACHE_DIR 时另存 JSON</td>
 </tr>
 <tr>
 <td>TextCandidate</td>
 <td>某条证据里的一个潜在实体</td>
-<td>文本角色与词表候选结合，含时间、类型、外观和区域</td>
-<td>匹配阶段内存对象</td>
+<td>非空模型类型集筛选和补齐候选；人物角色与定位描述优先用标注</td>
+<td>匹配阶段内存对象；target 进入 raw_attributes.grounding_query</td>
 </tr>
 <tr>
 <td>bbox / crop</td>
@@ -1263,7 +1355,7 @@ vision 的 loop_type 是 r1，chat 是 r2。</p>
 <tr>
 <td>calibrated event</td>
 <td>邻近报告归并后的事件</td>
-<td>按事件类型和时间窗合并，关联证据与实体</td>
+<td>LLM 优先判类型，规则按时间窗合并并关联证据与实体</td>
 <td>journal_calibrated_event / journal_calibrated_event_revision</td>
 </tr>
 <tr>
@@ -1287,19 +1379,19 @@ vision 的 loop_type 是 r1，chat 是 r2。</p>
 <tr>
 <td>scene master / daily</td>
 <td>摄像头所在场景长期状态与当日快照</td>
-<td>关键帧、固定锚点、区域和实体信号融合</td>
-<td>journal_scene / journal_scene_daily</td>
+<td>VLM 判固定锚物，融合区域和实体；规则维护场景状态</td>
+<td>journal_scene / journal_scene_daily；原始 fixed 在 vlm_profile</td>
 </tr>
 <tr>
 <td>rhythm master / daily</td>
 <td>重复活动窗口与当日活动直方图</td>
-<td>多日日快照聚合、规律发现及异常比较</td>
-<td>journal_activity_rhythm / journal_activity_rhythm_daily</td>
+<td>统计发现规律；LLM 裁决异常的 keep、note 和 severity</td>
+<td>journal_activity_rhythm / journal_activity_rhythm_daily；日快照仅存异常简表</td>
 </tr>
 <tr>
 <td>attention</td>
 <td>场景变化、未见实体、规律偏差等候选信号</td>
-<td>与历史基线比对，冷却去重和每天限额</td>
+<td>部分信号先经 LLM 裁决，再冷却去重和限额</td>
 <td>兼容日记表的 meta.attention；不自动发送通知</td>
 </tr>
 <tr>
@@ -1319,12 +1411,57 @@ vision 的 loop_type 是 r1，chat 是 r2。</p>
 视觉向量用于外观关联，不是通用文本 RAG 向量库。
 没有模型凭据、图片或定位能力时，可退回文本关联。
 新来源修订可产生新 Observation，并替代同来源旧观察。</p>
+<p><strong>文本标注现在怎样影响后续判断？</strong>
+合法且非空的 types 会筛掉模型未声明的关键词实体类型。
+随后补齐模型声明但词表没识别出的候选。
+types 为空或无合法类型时，仍保留词表结果。
+因此模型返回空数组，不代表强制判定“没有实体”。</p>
+<p>role 只覆盖 person，合法值为 elder、adult、child、staff、unknown。
+target 是主要目标的去动作外观描述，不是 bbox 或身份标签。
+ReID 优先使用 target 定位；缺失时用词表剥离动作。
+多目标记录没有逐实体 target，不能保证每个候选定位描述都独立。</p>
+<p>事件分类复用 types，不为每条记录另调分类模型。
+多标签按 package → vehicle → animal → object → person 选一个事件类型。
+animal 映射为 pet；时间窗归并仍由代码执行。</p>
+<p>窗口为 package 2 分钟、vehicle 10 分钟、pet 3 分钟。
+object 为 30 分钟、person 为 3 分钟；兜底 motion 为 3 分钟。</p>
+<p>文本角色缓存版本已从 1 升到 2，旧缓存不再命中。
+设备、日期、模型和文本内容共同决定缓存复用。
+role 和 target 与 types 同次生成，不额外调用模型。</p>
 <p>场景分析优先复用当日已有 VLM 结论。
 否则按配置挑选关键帧，融合固定锚点、区域、画质和空间信息。
 默认日限额为 1；不是对每条视频都调用场景模型。</p>
+<p>anchors[].fixed 优先决定是否作为固定参照物。
+接受布尔值和字符串 true / false；缺失或非法时回退名称词表。
+该标记复用场景 VLM 输出，不额外调用一次模型。
+旧日快照仍可复用，缺少 fixed 时走词表兜底。</p>
+<p>场景关键帧仍按 video_score、ominous、时间排序。
+它不同于 F 中新增的日记图片复核排序。</p>
 <p>规律读取默认 30 天活动快照，周期指纹可另读 120 天历史。
-规律名称和部分异常裁决可以调用文本模型。
+规律名称和新增异常裁决可以调用文本模型。
 统计发现仍以观察和日快照为输入，不是只看模型摘要猜规律。</p>
+<p><strong>提醒裁决不是让模型扫描全部视频寻找异常。</strong>
+节律模块先产生统计异常，再由 LLM 保留、抑制或改写。
+关怀模块先匹配策略、检查阈值和场景抑制，再交给 LLM。
+模型不能增加未进入候选集的提醒，也不改变证据引用和去重键。</p>
+<p>severity 仅接受 low、medium、high；文案限制 120 字符。
+关怀文案还须包含“建议关注”或“建议查看”，并排除内部术语。
+画面切换和画质信号绕过跨日冷却，仍受当天限额约束。</p>
+<p>当前裁决请求只发送候选类型、等级和文案等摘要。
+它不直接附带完整直方图、基线数值或采集覆盖状态。
+因此不能把模型裁决视为已经核对全部来源完整性。</p>
+<p><strong>统一裁决助手如何兜底？</strong>
+新增文本裁决统一调用 core.adjudication.run_adjudication()。
+它批量发送 items，通过输出 i 映射回输入 id。
+关闭开关、无可用模型、调用或解析异常时返回空决策。</p>
+<p>缺失项由调用方逐项回退；合法字段覆盖规则结果。
+裁决助手允许解析重试，实际请求数不保证只有一次。</p>
+<p>CARE_LLM_ENABLED、ANOMALY_LLM_ENABLED 默认开启。
+ROLE_LLM_ENABLED、GROUNDING_QUERY_LLM_ENABLED 默认也开启。
+SCENE_ANCHOR_FIXED_VLM_ENABLED 默认开启。
+关怀和异常的独立模型配置默认空，复用客户端默认文本模型。
+这些是源码默认值，不是已确认的 FC 环境变量。
+可选裁决回退不一定把日记标记成 generation_mode=fallback。</p>
 <p>图片签名、ReID、场景复核、日记图片复核和家庭外观描述是不同调用。
 它们可能使用同一关键帧，但没有统一的“一张图只读一次”全局保证。
 角色缓存、ReID 磁盘缓存和详情缓存也各有自己的开关与键。</p>
@@ -1332,8 +1469,11 @@ vision 的 loop_type 是 r1，chat 是 r2。</p>
 因此没有某类画像或中间数据，不一定让整个 FC 调用抛异常。
 process 模式会新建真实 OpenAi 客户端，不能假定继承 no_llm 替身。</p>
 <p>依据：<code>service.py:168</code>、<code>service.py:356</code>、<code>entity/matcher.py:267</code>。
-派生依据：<code>journal/calibration.py:84</code>、<code>journal/scene_profile.py:225</code>。
-规律与任务状态：<code>journal/activity_rhythm.py:1319</code>、<code>storage/mysql_repos.py:590</code>。</p>
+派生依据：<code>entity/candidate.py:251</code>、<code>entity/grounding.py:170</code>。
+标注与缓存：<code>entity/text_roles.py:76</code>、<code>:107</code>、<code>:180</code>。
+事件与场景：<code>journal/calibration.py:58</code>、<code>journal/scene_profile.py:97</code>、<code>:240</code>。
+裁决：<code>core/adjudication.py:48</code>、<code>journal/care_signals.py:359</code>。
+规律与任务状态：<code>journal/activity_rhythm.py:1036</code>、<code>:1319</code>、<code>storage/mysql_repos.py:590</code>。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-F">
@@ -1343,16 +1483,38 @@ process 模式会新建真实 OpenAi 客户端，不能假定继承 no_llm 替�
 默认每块最多 80 条，字符阈值 60000；单条过长时仍可能超过阈值。
 这些是代码默认值，不是已核对的云端配置。</p>
 </div>
-<figure class="am-diagram am-flow"><svg viewBox="0 0 199 841" width="199" height="841" role="img" aria-label="流程图：当日全部有效来源修订、排序与输入摘要、生成分块、图片复核与prompt组装、文本模型或静态回退、分块覆盖账本、合并结构化日记、实体事件字段回填与证据约束" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am3-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M99.5,49 L99.5,60.5 Q99.5,72 99.5,83.5 L99.5,95" marker-end="url(#am3-arrow)"/></g><g data-step="1"><path class="am-edge" d="M99.5,130 L99.5,141.5 Q99.5,153 99.5,164.5 L99.5,176" marker-end="url(#am3-arrow)"/></g><g data-step="2"><path class="am-edge" d="M99.5,211 L99.5,222.5 Q99.5,234 99.5,245.5 L99.5,257" marker-end="url(#am3-arrow)"/></g><g data-step="3"><path class="am-edge" d="M99.5,292 L99.5,303.5 Q99.5,315 99.5,326.5 L99.5,338" marker-end="url(#am3-arrow)"/></g><g data-step="4"><path class="am-edge" d="M99.5,373 L99.5,384.5 Q99.5,396 99.5,407.5 L99.5,419" marker-end="url(#am3-arrow)"/></g><g data-step="5"><path class="am-edge" d="M99.5,454 L99.5,465.5 Q99.5,477 99.5,488.5 L99.5,500" marker-end="url(#am3-arrow)"/></g><g data-step="6"><path class="am-edge" d="M99.5,535 L99.5,546.5 Q99.5,558 99.5,569.5 L99.5,581" marker-end="url(#am3-arrow)"/></g><g data-step="7"><path class="am-edge" d="M99.5,633 L99.5,644.5 Q99.5,656 99.5,667.5 L99.5,679" marker-end="url(#am3-arrow)"/></g><g data-step="8"><path class="am-edge" d="M99.5,714 L99.5,730 Q99.5,746 99.5,762 L99.5,778" marker-end="url(#am3-arrow)"/><g class="am-edge-label"><rect x="66.4" y="737" width="66.1" height="18" rx="3"/><text x="99.5" y="746" text-anchor="middle" dominant-baseline="central">upsert事务</text></g></g></g><g><g class="am-node am-node--rect" data-key="当日全部有效来源修订" data-step="0"><rect class="am-node-shape" x="20.5" y="14" width="158" height="35" rx="3"/><text x="99.5" y="31.5" text-anchor="middle" dominant-baseline="central">当日全部有效来源修订</text></g><g class="am-node am-node--rect" data-key="排序与输入摘要" data-step="0"><rect class="am-node-shape" x="40" y="95" width="119" height="35" rx="3"/><text x="99.5" y="112.5" text-anchor="middle" dominant-baseline="central">排序与输入摘要</text></g><g class="am-node am-node--rect" data-key="生成分块" data-step="1"><rect class="am-node-shape" x="59.5" y="176" width="80" height="35" rx="3"/><text x="99.5" y="193.5" text-anchor="middle" dominant-baseline="central">生成分块</text></g><g class="am-node am-node--rect" data-key="图片复核与prompt组装" data-step="2"><rect class="am-node-shape" x="19.3" y="257" width="160.3" height="35" rx="3"/><text x="99.5" y="274.5" text-anchor="middle" dominant-baseline="central">图片复核与prompt组装</text></g><g class="am-node am-node--rect" data-key="文本模型或静态回退" data-step="3"><rect class="am-node-shape" x="27" y="338" width="145" height="35" rx="3"/><text x="99.5" y="355.5" text-anchor="middle" dominant-baseline="central">文本模型或静态回退</text></g><g class="am-node am-node--rect" data-key="分块覆盖账本" data-step="4"><rect class="am-node-shape" x="46.5" y="419" width="106" height="35" rx="3"/><text x="99.5" y="436.5" text-anchor="middle" dominant-baseline="central">分块覆盖账本</text></g><g class="am-node am-node--rect" data-key="合并结构化日记" data-step="5"><rect class="am-node-shape" x="40" y="500" width="119" height="35" rx="3"/><text x="99.5" y="517.5" text-anchor="middle" dominant-baseline="central">合并结构化日记</text></g><g class="am-node am-node--rect" data-key="实体事件字段回填与证据约束" data-step="6"><rect class="am-node-shape" x="14" y="581" width="171" height="52" rx="3"/><text x="99.5" y="598.5" text-anchor="middle" dominant-baseline="central">实体事件字段回填与证据</text><text x="99.5" y="615.5" text-anchor="middle" dominant-baseline="central">约束</text></g><g class="am-node am-node--rect" data-key="主动感知与状态标记" data-step="7"><rect class="am-node-shape" x="27" y="679" width="145" height="35" rx="3"/><text x="99.5" y="696.5" text-anchor="middle" dominant-baseline="central">主动感知与状态标记</text></g><g class="am-node am-node--db" data-key="日记修订与lineage" data-step="8"><path class="am-node-shape" d="M30.6,785 A68.9,7 0 0 1 168.4,785 V820 A68.9,7 0 0 1 30.6,820 Z"/><path class="am-node-shape" d="M30.6,785 A68.9,7 0 0 0 168.4,785"/><text x="99.5" y="806.5" text-anchor="middle" dominant-baseline="central">日记修订与lineage</text></g></g></svg></figure>
-<div class="am-md"><p>图片复核根据候选优先级、去重和剩余预算选择图片。
+<figure class="am-diagram am-flow"><svg viewBox="0 0 205 939" width="205" height="939" role="img" aria-label="流程图：当日全部有效来源修订、排序与输入摘要、生成分块、分块文本排序与预算选图、VLM逐图复核与prompt组装、文本模型或静态回退、分块覆盖账本、合并结构化日记" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am3-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M102.1,49 L102.1,60.5 Q102.1,72 102.1,83.5 L102.1,95" marker-end="url(#am3-arrow)"/></g><g data-step="1"><path class="am-edge" d="M102.1,130 L102.1,141.5 Q102.1,153 102.1,164.5 L102.1,176" marker-end="url(#am3-arrow)"/></g><g data-step="2"><path class="am-edge" d="M102.1,211 L102.1,222.5 Q102.1,234 102.1,245.5 L102.1,257" marker-end="url(#am3-arrow)"/></g><g data-step="3"><path class="am-edge" d="M102.1,292 L102.1,303.5 Q102.1,315 102.1,326.5 L102.1,338" marker-end="url(#am3-arrow)"/></g><g data-step="4"><path class="am-edge" d="M102.1,390 L102.1,401.5 Q102.1,413 102.1,424.5 L102.1,436" marker-end="url(#am3-arrow)"/></g><g data-step="5"><path class="am-edge" d="M102.1,471 L102.1,482.5 Q102.1,494 102.1,505.5 L102.1,517" marker-end="url(#am3-arrow)"/></g><g data-step="6"><path class="am-edge" d="M102.1,552 L102.1,563.5 Q102.1,575 102.1,586.5 L102.1,598" marker-end="url(#am3-arrow)"/></g><g data-step="7"><path class="am-edge" d="M102.1,633 L102.1,644.5 Q102.1,656 102.1,667.5 L102.1,679" marker-end="url(#am3-arrow)"/></g><g data-step="8"><path class="am-edge" d="M102.1,731 L102.1,742.5 Q102.1,754 102.1,765.5 L102.1,777" marker-end="url(#am3-arrow)"/></g><g data-step="9"><path class="am-edge" d="M102.1,812 L102.1,828 Q102.1,844 102.1,860 L102.1,876" marker-end="url(#am3-arrow)"/><g class="am-edge-label"><rect x="69" y="835" width="66.1" height="18" rx="3"/><text x="102.1" y="844" text-anchor="middle" dominant-baseline="central">upsert事务</text></g></g></g><g><g class="am-node am-node--rect" data-key="当日全部有效来源修订" data-step="0"><rect class="am-node-shape" x="23.1" y="14" width="158" height="35" rx="3"/><text x="102.1" y="31.5" text-anchor="middle" dominant-baseline="central">当日全部有效来源修订</text></g><g class="am-node am-node--rect" data-key="排序与输入摘要" data-step="0"><rect class="am-node-shape" x="42.6" y="95" width="119" height="35" rx="3"/><text x="102.1" y="112.5" text-anchor="middle" dominant-baseline="central">排序与输入摘要</text></g><g class="am-node am-node--rect" data-key="生成分块" data-step="1"><rect class="am-node-shape" x="62.1" y="176" width="80" height="35" rx="3"/><text x="102.1" y="193.5" text-anchor="middle" dominant-baseline="central">生成分块</text></g><g class="am-node am-node--rect" data-key="分块文本排序与预算选图" data-step="2"><rect class="am-node-shape" x="16.6" y="257" width="171" height="35" rx="3"/><text x="102.1" y="274.5" text-anchor="middle" dominant-baseline="central">分块文本排序与预算选图</text></g><g class="am-node am-node--rect" data-key="VLM逐图复核与prompt组装" data-step="3"><rect class="am-node-shape" x="14" y="338" width="176.2" height="52" rx="3"/><text x="102.1" y="355.5" text-anchor="middle" dominant-baseline="central">VLM逐图复核与prompt组</text><text x="102.1" y="372.5" text-anchor="middle" dominant-baseline="central">装</text></g><g class="am-node am-node--rect" data-key="文本模型或静态回退" data-step="4"><rect class="am-node-shape" x="29.6" y="436" width="145" height="35" rx="3"/><text x="102.1" y="453.5" text-anchor="middle" dominant-baseline="central">文本模型或静态回退</text></g><g class="am-node am-node--rect" data-key="分块覆盖账本" data-step="5"><rect class="am-node-shape" x="49.1" y="517" width="106" height="35" rx="3"/><text x="102.1" y="534.5" text-anchor="middle" dominant-baseline="central">分块覆盖账本</text></g><g class="am-node am-node--rect" data-key="合并结构化日记" data-step="6"><rect class="am-node-shape" x="42.6" y="598" width="119" height="35" rx="3"/><text x="102.1" y="615.5" text-anchor="middle" dominant-baseline="central">合并结构化日记</text></g><g class="am-node am-node--rect" data-key="实体事件字段回填与图文裁决" data-step="7"><rect class="am-node-shape" x="16.6" y="679" width="171" height="52" rx="3"/><text x="102.1" y="696.5" text-anchor="middle" dominant-baseline="central">实体事件字段回填与图文</text><text x="102.1" y="713.5" text-anchor="middle" dominant-baseline="central">裁决</text></g><g class="am-node am-node--rect" data-key="主动感知与状态标记" data-step="8"><rect class="am-node-shape" x="29.6" y="777" width="145" height="35" rx="3"/><text x="102.1" y="794.5" text-anchor="middle" dominant-baseline="central">主动感知与状态标记</text></g><g class="am-node am-node--db" data-key="日记修订与lineage" data-step="9"><path class="am-node-shape" d="M33.2,883 A68.9,7 0 0 1 171,883 V918 A68.9,7 0 0 1 33.2,918 Z"/><path class="am-node-shape" d="M33.2,883 A68.9,7 0 0 0 171,883"/><text x="102.1" y="904.5" text-anchor="middle" dominant-baseline="central">日记修订与lineage</text></g></g></svg></figure>
+<div class="am-md"><p>图片复核先收集带图候选，再用文本 LLM 打 0–10 分。
+模型读取 title、description、ominous，不读取图片像素。
+缺项或非法分数回退规则分，整体失败则回退规则排序。
+然后按排序、去重和剩余预算选择图片，交给 VLM 逐图复核。
 默认预算为一轮日记构建 3 次，分块间累计 ledger。
-新的全日重建并不是自动复用数据库里所有旧复核结论。
-复核输出 finding、changed、claims、temporal_context 等信息。
+新的全日重建并不是自动复用数据库里所有旧复核结论。</p>
+<p>复核输出 finding、changed、claims、temporal_context 等信息。
 它们既进入 prompt，也进入可审计的复核账本。
 预算耗尽、重复与失败也有记录，不是凭空得到新视觉结论。</p>
+<p>IMAGE_REVIEW_SELECT_LLM_ENABLED 默认开启。
+排序在每个分块内部执行，不是对全日所有图片统一排序。
+前块可能先用完预算，后块的高分图未必能复核。
+预算耗尽时仍可能调用排序模型；0 分也不是排除候选的硬门槛。
+3 次预算限制的是图片复核，不是整条流水线所有模型调用。</p>
+<p><strong>图文冲突如何消解？</strong>
+只处理成功图片复核中 verdict=contradicted 的可见事实主张。
+图片不能推翻来源的 capture_time 等时间字段。
+_claim_match_resolver() 批量配对主张与日记条目或摘要句。
+文本 LLM 判定是否为同一事实，缺项时回退同义词和子串匹配。
+CLAIM_MATCH_LLM_ENABLED 默认开启，输出 match 必须是布尔值。</p>
+<p>程序仅移除匹配条目中被否定的来源引用。
+证据数降到零才移除整个结构化条目。
+若条目被移除且无保留条目支持该主张，再清理匹配摘要句。</p>
+<p>known_noise_sources 保存图文冲突，meta 保存 image_evidence_constraints。
+冲突处理不修改原始来源修订，也不重写已落库的 Entity 或事件。
+分块生成后和全日合并后都可能执行裁决，没有全局复用保证。
+日记复核排序和冲突匹配的模型配置默认空，复用默认文本模型。</p>
 <p>prompt 包含文本记录、复核结论和可用实体、事件、时段、场景、规律。
 R1 的部分字段由代码计算并在生成后回填。
 不是让模型自由发明 entity_id 或替代校准事件。
+代码回填字段也可能依赖前面的模型判断，不代表完全不依赖模型。
 符合确定性 R1 条件时，各块独立生成语义增量，再由代码合并。
 模型失败时用静态摘要回退，并标记内容降级。</p>
 <p>相同文本可以在 prompt 中合并，减少重复输入。
@@ -1443,8 +1605,8 @@ Entity 的生命周期、置信度和证据仍需要结合读取。</p>
 </tr>
 <tr>
 <td>journal_image_review</td>
-<td>图片复核状态、逐项判断、来源引用、模型和成本等</td>
-<td>审核视觉判断，不直接保存签名 URL</td>
+<td>图片复核状态、候选分数、逐项判断、来源引用及复核成本</td>
+<td>审核视觉判断，不直接保存签名 URL；不完整记录排序模型成本</td>
 </tr>
 <tr>
 <td>bc10_journals_dev 或配置的兼容日记表</td>
@@ -1522,7 +1684,8 @@ Entity 的生命周期、置信度和证据仍需要结合读取。</p>
 <p>新增或更正来源可以触发新的全日日记修订。
 已有 status=ok 的周期总结却不会因此自动全部重压。
 所以“日日记修正”不代表“全部长期总结已同步修正”。</p>
-<p>依据：<code>journal/writer.py:285</code>、<code>journal/image_review.py:46</code>。
+<p>依据：<code>journal/writer.py:285</code>、<code>:485</code>、<code>:719</code>。
+选图与复核：<code>journal/image_review.py:46</code>、<code>:260</code>、<code>:287</code>。
 回填与保存：<code>service.py:510</code>、<code>storage/mysql_repos.py:250</code>。
 成熟度：<code>journal/readiness.py:15</code>、<code>core/config.py:122</code>。</p>
 </div></div>
@@ -1604,8 +1767,16 @@ fallback 周期可以在后续补压重试。</p>
 不能只读 digest 来理解周期日记覆盖和成员内容。</p>
 <p>家庭画像会先读取用户全部设备的主档，不只读取本次设备。
 数量估计优先参考同帧最大并发，降低实体碎片被重复计数的影响。
-外观描述和物种判断可按预算调用图片或文本模型。
-画像还保存 source_day、builder_version、统计量及 species_prior_text。
+外观描述和物种判断可按预算调用图片或文本模型。</p>
+<p>随后 _annotate_vehicle_categories() 批量读取车辆 semantic 与 appearance。
+文本模型给出类别，_build_vehicles() 优先按该类别聚合。
+失败或缺失类别时，回退语义类型到车辆类别的词表映射。
+VEHICLE_CATEGORY_LLM_ENABLED 默认开启，独立模型默认空。</p>
+<p>车辆类别先写在本次内存实体副本，再进入家庭画像。
+此函数没有把新类别单独回写 Entity 主档。
+归类可扫描全部车辆，入画像仍受默认 10 个活跃日门槛限制。
+类别只检查非空并截取 10 字符，没有固定类别枚举校验。</p>
+<p>画像还保存 source_day、builder_version、统计量及 species_prior_text。
 跨设备汇总不等于已经实现跨摄像头同一身份的可靠匹配。</p>
 <p><strong>Chat 记忆怎么进入同一套沉淀？</strong>
 当前 prepare 固定不生成 chat，writer 在 pipeline 中也只写 vision。
@@ -1623,7 +1794,7 @@ user_memories 中 memory_type 可为 fact、preference、constraint、decision�
 新增设备还可能遇到固定 source_id 的共享 checkpoint。
 这些边界决定“本次拉了谁”和“本次加工了谁”可能不同。</p>
 <p>依据：<code>service.py:636</code>、<code>journal/consolidation.py:231</code>。
-画像：<code>household/profile_builder.py:80</code>。
+画像：<code>household/profile_builder.py:81</code>、<code>:357</code>、<code>:400</code>。
 R2 模型字段：<code>specs.py:31</code>。</p>
 </div></div>
 </section>
@@ -1778,6 +1949,52 @@ FC 返回的 artifacts 是实例本地路径，不是自动可下载的 OSS 地�
 顶层 ok=true 只表示没有捕获到顶层 error 字段。
 Worker failed 大于零、Memory 单项报错或导出警告仍可能存在。
 成功验收必须检查这些明细，并核对目标用户设备的数据库结果。</p>
+<p><strong>最新版本仍需留意哪些边界？</strong></p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>边界</th>
+<th>当前事实</th>
+<th>验收时应检查</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>模型成本与 FC 时长</td>
+<td>新增排序、冲突、提醒和车辆裁决，不能按 3 张图估算全部调用量</td>
+<td>文本与视觉耗时、限流、重试以及 FC 超时预算</td>
+</tr>
+<tr>
+<td>候选覆盖</td>
+<td>空 types 会回退词表；提醒模型只看规则候选</td>
+<td>否定句、多目标描述、规则未筛出的异常和召回率</td>
+</tr>
+<tr>
+<td>裁决输入与审计</td>
+<td>部分裁决只看摘要；没有统一持久化全部新裁决请求和成本</td>
+<td>不能只凭 generation_mode=generated 认定所有模型阶段成功</td>
+</tr>
+<tr>
+<td>图片预算</td>
+<td>分块内排序，前块先占预算；耗尽后仍可能调用排序模型</td>
+<td>敏感图片是否跨块遗漏；总模型请求数是否符合预期</td>
+</tr>
+<tr>
+<td>画像类别与旧缓存</td>
+<td>车辆类别无固定枚举；旧场景结论可继续复用</td>
+<td>类别漂移、分组碎片和缺少 fixed 的旧场景数据</td>
+</tr>
+<tr>
+<td>来源与租户范围</td>
+<td>共享 checkpoint、全库 Job 消费和导出仍未改变</td>
+<td>新用户设备回填遗漏和非目标用户数据是否进入导出</td>
+</tr>
+<tr>
+<td>部署版本</td>
+<td>本地 dev 更新不等于 FC 自动更新，已有 ZIP 可能仍为旧版本</td>
+<td>重新打包并部署后核对云端版本与环境变量</td>
+</tr>
+</tbody></table></div>
+<p>以上是源码边界，不是已经观察到的云端事故。</p>
 <p><strong>用一个例子串起全部对象。</strong>
 以下只是示意，不是当前数据库中的真实事件。
 同一设备 09:00 和 09:01 出现两条相邻投递视频描述。
@@ -1792,8 +2009,10 @@ Worker 用该日全部有效证据生成新日日记修订和 lineage。</p>
 <p>依据：<code>service.py:671</code>、<code>journal/memory_query.py:26</code>、<code>:175</code>、<code>:317</code>。
 导出：<code>sim/journal.py:646</code>、<code>:670</code>、<code>:784</code>。
 接口差异：<code>api/fc_handler.py:75</code>、<code>api/fastapi_app.py:174</code>。</p>
-<p>本次用 Conda llm 检查相关模块：300 项测试通过，5 项集成测试跳过。
-测试覆盖入口、下载协议、采集、对账、生成、实体、场景、规律和画像等模块。
+<p>本次用 Conda llm 检查相关模块：415 项测试通过，5 项集成测试跳过。
+检查时设置 JOURNAL_ENV=local_test，关闭 FC 与下载集成测试。
+测试覆盖入口、下载协议、采集、对账、生成、实体、场景、规律和画像。
+也覆盖新增角色标注、定位描述、选图、关怀和图文裁决相关行为。
 这些是本地替身验证，不代表真实云端数据和模型链路已验收。</p>
 </div></div>
 </section>
@@ -1815,7 +2034,7 @@ Worker 用该日全部有效证据生成新日日记修订和 lineage。</p>
 <div class="am-lightbox-canvas am-diagram"></div>
 </div>
 </div>
-<footer class="am-colophon">Generated by <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">Answer me with HTML</a> 0.4.15 · 2026-10-10 14:15</footer>
+<footer class="am-colophon">Generated by <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">Answer me with HTML</a> 0.4.15 · 2026-10-10 15:53</footer>
 <textarea id="am-source" hidden readonly aria-hidden="true">---
 title: 从 FC 入口到记忆沉淀的完整调用流程
 subtitle: 函数怎么调用，何时读什么数据，中间产物代表什么，最后交付什么
@@ -1824,6 +2043,7 @@ template: doc
 theme: paper
 date: 2026-10-10
 scope: 当前仓库代码；以 sim_pipeline 的 vision 主链路为主
+revision: dev / 700d8ca
 ---
 
 ## A 整个系统最终在做什么
@@ -1867,39 +2087,75 @@ chat 对应 R2，作用域是用户，内部设备键使用 `_`。
 开关、依赖失败和空数据会改变实际执行分支。
 本次没有连接云端或读写业务数据库。
 
+**本次同步到 dev 的 700d8ca。**
+对比基线为 5da4c23，新增变化来自 d7a2629 和 700d8ca。
+FC、云端拉数、Collector 和 Memory 查询主链路没有变化。
+变化集中在语义判断，不是替换整套存储或采集架构。
+
+| 最新变化 | 对调用流程的影响 | 本页位置 |
+| --- | --- | --- |
+| 类型与事件分类改为 LLM 优先 | 同一文本标注同时供实体匹配和事件校准使用 | C、E |
+| 角色、定位描述和固定锚物改由模型主导 | 复用文本标注或场景 VLM，不额外单独调用一次 | E |
+| 图片排序与图文冲突增加文本裁决 | 分块复核前排序，生成后按主张约束证据 | F |
+| 节律异常和关怀提醒增加文本裁决 | 规则先筛候选，模型再保留、抑制或改写 | E |
+| 家庭车辆类别增加文本裁决 | 画像刷新时批量归类，再按类别聚合车辆 | G |
+
+本地代码版本不证明 FC 已部署同一版本。
+本次只更新文档，不重新打包或部署云端函数。
+
 ## B 从 FC 开始，函数按什么顺序调用
 
-```tree
-journal_service.api.fc_handler.handler(event, context)
+**入口解析与分流**
+入口文件是 `journal_service/api/fc_handler.py`。
+
+```tree list
+handler(event, context)
   解析 bytes / str JSON | FC 事件转成字典
   Timer 解包 payload | 未指定 action 时默认 consolidate_all
   HTTP 信封分流 | 有 path 或 method 时进入 _handle_http
   _handle_event(event) | 根据 action 分发
-    _handle_sim_action(action, event) | sim action 提前分流，不调用 _svc()
-      _run_sim_pipeline(prepare, writer, journal, params)
-        sim.prepare.run(params) | ① 云端拉数和按天落盘
-          _apply_cloud_env() | 配置视频接口使用的运行时环境
-          _resolve_device_sns() | 显式设备优先，否则拉设备列表
-          downloader.collect_device_videos() | 逐设备拉视频描述与详情
-          map_to_table_row() | 生成动态表字段
-          _select_latest_window() | 可选保留最近自然日
-        sim.writer.run(params) | ② 把准备数据写入动态表
-          load_exp() | 读 meta.json 和日期列表
-          write_day() | 逐天 INSERT IGNORE
-          update_cursor() | 记录本实验已写日期
-        sim.journal.run(params) | ③ 记忆加工与导出
-          _validate_params() | 域、用户、设备、模型凭据等校验
-          JournalService(..., source_adapter=adapter) | 单独创建服务
-          register_source() | 登记选定域的 SourceDefinition
-          SourceCollector.collect() | 对每个 ready 来源分页采集
-          _snapshot_source() | 从来源表扫描历史快照
-          SourceReconciler.reconcile_scope() | 按设备和自然日对账
-          process_pending_jobs(limit=10) | 循环直到当前无可领取任务
-            _process_day_job(job) | 执行一个日级任务，详见 E、F
-          run_entity_lifecycle_maintenance() | 仅 lifecycle=true 时执行
-          consolidate_all() | 未设置 skip_consolidate 时执行
-          assemble_memory() | 每设备和用户级只读查询
-          导出 journals / memory / evidence / run JSON
+```
+
+sim 事件依次进入 `_handle_sim_action()` 和 `_run_sim_pipeline()`。
+这条分支提前分流，不调用默认 `_svc()`。
+`_run_sim_pipeline(prepare, writer, journal, params)` 串行调用三个阶段。
+
+**① prepare：云端拉数和按天落盘**
+
+```tree list
+sim.prepare.run(params)
+  _apply_cloud_env() | 配置视频接口使用的运行时环境
+  _resolve_device_sns() | 显式设备优先，否则拉设备列表
+  collect_device_videos() | downloader 模块；逐设备拉视频描述与详情
+  map_to_table_row() | 生成动态表字段
+  _select_latest_window() | 可选保留最近自然日
+```
+
+**② writer：把准备数据写入动态表**
+
+```tree list
+sim.writer.run(params)
+  load_exp() | 读 meta.json 和日期列表
+  write_day() | 逐天 INSERT IGNORE
+  update_cursor() | 记录本实验已写日期
+```
+
+**③ journal：记忆加工与导出**
+
+```tree list
+sim.journal.run(params)
+  _validate_params() | 域、用户、设备、模型凭据等校验
+  JournalService() | 注入 source_adapter=adapter，单独创建服务
+  register_source() | 登记选定域的 SourceDefinition
+  SourceCollector.collect() | 对每个 ready 来源分页采集
+  _snapshot_source() | 从来源表扫描历史快照
+  reconcile_scope() | SourceReconciler；按设备和自然日对账
+  process_pending_jobs(limit=10) | 循环直到当前无可领取任务
+    _process_day_job(job) | 执行一个日级任务，详见 E、F
+  生命周期维护 | run_entity_lifecycle_maintenance()；仅 lifecycle=true
+  consolidate_all() | 未设置 skip_consolidate 时执行
+  assemble_memory() | 每设备和用户级只读查询
+  导出 JSON | journals / memory / evidence / run
 ```
 
 prepare → writer → journal 在同一次 FC 调用内串行执行。
@@ -1946,6 +2202,7 @@ sim_pipeline 事件分支不走这份 HTTP 令牌校验。
 第一种从云平台和 OSS 获取新输入。
 第二种从 MySQL 读取来源及历史记忆。
 第三种把关键帧送给模型，得到定位、向量或复核结果。
+新增文本裁决只读取结构化文本，不等于又下载一遍图片。
 
 | 时机 | 函数 | 从哪里取 | 实际取得什么 |
 | --- | --- | --- | --- |
@@ -1959,12 +2216,18 @@ sim_pipeline 事件分支不走这份 HTTP 令牌校验。
 | Collector 每页 | `UserBoundSourceAdapter.fetch_page()` | 开发动态表 | 主键、事件时间、文本字段、图片和录像引用 |
 | 增量采集结束后 | `_snapshot_source()` | 同一来源动态表 | 选定设备的历史快照，用于对账 |
 | Worker 每个 Job 开始 | `get_source_revision()`、`list_current_source_records()` | 来源修订账本 | 任务触发修订，以及该日全部当前有效记录 |
+| Worker 取得当日来源后 | `extract_roles()` | 文本模型；启用时先读角色缓存 | types、motions、zone、role、target；不读取图片 |
 | 实体匹配开始及样本比较时 | `list_observations()`、实体和样本访问器 | Entity、Observation、Sample 表 | 已有实体、当天观察、历史向量样本 |
 | 有可用 ReID 客户端且需视觉探测 | `prepare_frame_embeddings()` 等 | 图片签名接口、关键帧、定位和向量模型 | 图像像素、bbox、裁剪图向量及视觉证据 |
 | 场景分析时 | `get_scene()`、`get_scene_daily()`、`_vlm_profile()` | 历史场景表和选中的关键帧 | 场景主档、当日缓存结论或新的视觉场景结论 |
+| 每个日记分块复核前，有带图记录 | `ImageReviewer._select()` → `_llm_rank()` | 文本模型 | 根据标题和描述返回 0–10 的复核价值分；此时不读图 |
 | 日记分块生成时 | `ImageReviewer.review_with_ledger()` | 图片签名接口和视觉模型 | 有预算的图片逐项复核结果 |
+| 图片否定主张且有待匹配文本 | `_enforce_image_evidence()` → `_claim_match_resolver()` | 文本模型 | 主张与日记条目是否描述同一事实；不是再次看图 |
 | 规律与成熟度分析时 | 规律、日记历史访问器 | 已存日快照和日记 | 多日活动分布、覆盖与事件确认比例 |
+| 规则产生节律异常候选后 | `_adjudicate_anomalies()` | 文本模型 | keep、severity、note；无候选时不调用 |
+| 日记生成后，规则产生关怀候选 | `build_care_attention()` → `_adjudicate_candidates()` | 文本模型 | emit、severity、note；无候选时不调用 |
 | 家庭画像刷新时 | `refresh_user_profile()` | 用户全部设备实体及同帧观察 | 常驻成员、外观、物种票与数量估计依据 |
+| 画像刷新时存在车辆实体 | `_annotate_vehicle_categories()` | 文本模型 | 根据 semantic 与 appearance 返回车辆类别 |
 | 周期补压时 | `Consolidator.run()` | 已存日、周、月日记 | 对应完整自然周期内的摘要与实体等字段 |
 | Memory 查询时 | `MemoryQueryAssembler.assemble()` | Journal 版本账本 | 截至 as_of 的选定日、周、月、年版本 |
 | sim 导出时 | journal 模块中的导出查询 | MySQL 账本 | 全库日记修订和指定证据表；不是仅本次用户 |
@@ -2114,21 +2377,23 @@ Job 从 pending 变成 running，领取时增加 attempts 和租约。
 JournalService._process_day_job(job)
   get_source_revision(revision_id) | 确认触发任务的证据存在
   list_current_source_records(domain, user, device, day) | 取该日全部当前有效记录
-  extract_roles(llm, source_revisions) | 批量文本多标签，失败回退词表
+  extract_roles(llm, source_revisions) | types / motions / zone / role / target
   EntityMatcher.match_scope() | vision 且匹配开关开启
-    extract_candidates() | 实体类型、外观、动作、方位候选
+    extract_candidates() | 非空 LLM 类型集优先，角色与 target 复用标注
+    build_grounding_query() | 优先 target，无有效描述时剥离动作兜底
     ReIDModule.prepare_frame_embeddings() | 按需图片定位、裁剪、向量
     文本与视觉匹配 | 关联已有实体或创建匿名实体
     persist_entity_match_scope() | 同事务保存实体、Observation、样本
-  calibrate_events() → sync_calibrated_events() | vision 的事件去重和修订
+  calibrate_events() → sync_calibrated_events() | 类型优先用 LLM，时间窗归并仍由规则执行
   _update_activity_logs() | 按开关更新实体单日活动和基线
   run_statistical_correction() | 按开关合并或拆分实体碎片
   build_time_slot_profile() | 生成晨、午、晚、夜证据分布
   _readiness_for_scope() | 查询已有日记，评估历史是否够用
-  SceneProfiler.profile_scope() | 场景主档和当日场景快照
-  ActivityRhythmProfiler.profile_day() | 跨日规律及当日偏差
+  SceneProfiler.profile_scope() | VLM fixed 判固定锚物，规则选帧与维护状态
+  ActivityRhythmProfiler.profile_day() | 统计发现规律，LLM 裁决异常候选
   JournalWriter.write_day_canonical() | 详见 F
-  主动感知候选 → apply_attention_cooldown() | 合并、去重、限额
+  build_care_attention(..., llm=self.llm) | 规则筛关怀候选，LLM 决定提醒与文案
+  主动感知候选 → apply_attention_cooldown() | 合并、去重、限额；特定紧急信号不冷却
   repo.upsert(journal) | 原子写入本次日记版本账本
   refresh_user_profile() | vision 收尾，按开关刷新家庭画像
 ```
@@ -2140,19 +2405,19 @@ vision 的 loop_type 是 r1，chat 是 r2。
 
 | 中间产物 | 对应含义 | 如何产生 | 保存在哪里 |
 | --- | --- | --- | --- |
-| declared_by_revision | 每条文本涉及哪些类型、动作、方位 | 分批文本模型判定；默认每批 40 条，失败回退词表 | 内存；配置 TEXT_ROLES_CACHE_DIR 时另存 JSON |
-| TextCandidate | 某条证据里的一个潜在实体 | 文本角色与词表候选结合，含时间、类型、外观和区域 | 匹配阶段内存对象 |
+| declared_by_revision | types、motions、zone、role、target | 分批文本模型判定；默认每批 40 条，失败回退词表 | 内存；配置 TEXT_ROLES_CACHE_DIR 时另存 JSON |
+| TextCandidate | 某条证据里的一个潜在实体 | 非空模型类型集筛选和补齐候选；人物角色与定位描述优先用标注 | 匹配阶段内存对象；target 进入 raw_attributes.grounding_query |
 | bbox / crop | 关键帧中目标的定位框与裁剪图片 | 按需定位模型、像素下载和图像裁剪 | bbox 进入视觉证据；裁剪文件是临时文件 |
 | embedding / Sample | 某实体的外观数值特征，不是身份信息 | 裁剪图向量模型；与历史中心向量等比较 | journal_entity_sample，向量以 float32 BLOB 保存 |
 | Entity | 设备内跨时间累积的匿名实体主档 | 文本、位置、时间及可用视觉证据关联 | journal_entity |
 | Observation | 在某个时间、位置看到了哪个实体 | 每个已关联候选记录动作、匹配方式、分数和来源修订 | journal_observation |
-| calibrated event | 邻近报告归并后的事件 | 按事件类型和时间窗合并，关联证据与实体 | journal_calibrated_event / journal_calibrated_event_revision |
+| calibrated event | 邻近报告归并后的事件 | LLM 优先判类型，规则按时间窗合并并关联证据与实体 | journal_calibrated_event / journal_calibrated_event_revision |
 | activity_log / normal_pattern | 单实体活动摘要及其自身历史基线 | 当日观察次数、夜间活动、观察间隔和出入数据聚合 | journal_entity 的 JSON 字段 |
 | reid_corrections | 实体错误关联的合并或拆分记录 | 统计视觉样本，修改归属并保留审计 | 实体 attributes、Observation 与样本归属 |
 | time_slot_profile | 当日四个时段观察、事件及证据分布 | 用事件真实时间确定时段，不让图片猜时间 | 日记 content，生成前先在内存 |
-| scene master / daily | 摄像头所在场景长期状态与当日快照 | 关键帧、固定锚点、区域和实体信号融合 | journal_scene / journal_scene_daily |
-| rhythm master / daily | 重复活动窗口与当日活动直方图 | 多日日快照聚合、规律发现及异常比较 | journal_activity_rhythm / journal_activity_rhythm_daily |
-| attention | 场景变化、未见实体、规律偏差等候选信号 | 与历史基线比对，冷却去重和每天限额 | 兼容日记表的 meta.attention；不自动发送通知 |
+| scene master / daily | 摄像头所在场景长期状态与当日快照 | VLM 判固定锚物，融合区域和实体；规则维护场景状态 | journal_scene / journal_scene_daily；原始 fixed 在 vlm_profile |
+| rhythm master / daily | 重复活动窗口与当日活动直方图 | 统计发现规律；LLM 裁决异常的 keep、note 和 severity | journal_activity_rhythm / journal_activity_rhythm_daily；日快照仅存异常简表 |
+| attention | 场景变化、未见实体、规律偏差等候选信号 | 部分信号先经 LLM 裁决，再冷却去重和限额 | 兼容日记表的 meta.attention；不自动发送通知 |
 | memory_readiness | 是否有足够历史支持稳定记忆结论 | 统计天数、记录、时段、事件和对账覆盖 | 日记 meta 中状态；完整指标在 Memory 查询重算 |
 
 **Entity、Observation、事件不是同一个东西。**
@@ -2167,13 +2432,71 @@ vision 的 loop_type 是 r1，chat 是 r2。
 没有模型凭据、图片或定位能力时，可退回文本关联。
 新来源修订可产生新 Observation，并替代同来源旧观察。
 
+**文本标注现在怎样影响后续判断？**
+合法且非空的 types 会筛掉模型未声明的关键词实体类型。
+随后补齐模型声明但词表没识别出的候选。
+types 为空或无合法类型时，仍保留词表结果。
+因此模型返回空数组，不代表强制判定“没有实体”。
+
+role 只覆盖 person，合法值为 elder、adult、child、staff、unknown。
+target 是主要目标的去动作外观描述，不是 bbox 或身份标签。
+ReID 优先使用 target 定位；缺失时用词表剥离动作。
+多目标记录没有逐实体 target，不能保证每个候选定位描述都独立。
+
+事件分类复用 types，不为每条记录另调分类模型。
+多标签按 package → vehicle → animal → object → person 选一个事件类型。
+animal 映射为 pet；时间窗归并仍由代码执行。
+
+窗口为 package 2 分钟、vehicle 10 分钟、pet 3 分钟。
+object 为 30 分钟、person 为 3 分钟；兜底 motion 为 3 分钟。
+
+文本角色缓存版本已从 1 升到 2，旧缓存不再命中。
+设备、日期、模型和文本内容共同决定缓存复用。
+role 和 target 与 types 同次生成，不额外调用模型。
+
 场景分析优先复用当日已有 VLM 结论。
 否则按配置挑选关键帧，融合固定锚点、区域、画质和空间信息。
 默认日限额为 1；不是对每条视频都调用场景模型。
 
+anchors[].fixed 优先决定是否作为固定参照物。
+接受布尔值和字符串 true / false；缺失或非法时回退名称词表。
+该标记复用场景 VLM 输出，不额外调用一次模型。
+旧日快照仍可复用，缺少 fixed 时走词表兜底。
+
+场景关键帧仍按 video_score、ominous、时间排序。
+它不同于 F 中新增的日记图片复核排序。
+
 规律读取默认 30 天活动快照，周期指纹可另读 120 天历史。
-规律名称和部分异常裁决可以调用文本模型。
+规律名称和新增异常裁决可以调用文本模型。
 统计发现仍以观察和日快照为输入，不是只看模型摘要猜规律。
+
+**提醒裁决不是让模型扫描全部视频寻找异常。**
+节律模块先产生统计异常，再由 LLM 保留、抑制或改写。
+关怀模块先匹配策略、检查阈值和场景抑制，再交给 LLM。
+模型不能增加未进入候选集的提醒，也不改变证据引用和去重键。
+
+severity 仅接受 low、medium、high；文案限制 120 字符。
+关怀文案还须包含“建议关注”或“建议查看”，并排除内部术语。
+画面切换和画质信号绕过跨日冷却，仍受当天限额约束。
+
+当前裁决请求只发送候选类型、等级和文案等摘要。
+它不直接附带完整直方图、基线数值或采集覆盖状态。
+因此不能把模型裁决视为已经核对全部来源完整性。
+
+**统一裁决助手如何兜底？**
+新增文本裁决统一调用 core.adjudication.run_adjudication()。
+它批量发送 items，通过输出 i 映射回输入 id。
+关闭开关、无可用模型、调用或解析异常时返回空决策。
+
+缺失项由调用方逐项回退；合法字段覆盖规则结果。
+裁决助手允许解析重试，实际请求数不保证只有一次。
+
+CARE_LLM_ENABLED、ANOMALY_LLM_ENABLED 默认开启。
+ROLE_LLM_ENABLED、GROUNDING_QUERY_LLM_ENABLED 默认也开启。
+SCENE_ANCHOR_FIXED_VLM_ENABLED 默认开启。
+关怀和异常的独立模型配置默认空，复用客户端默认文本模型。
+这些是源码默认值，不是已确认的 FC 环境变量。
+可选裁决回退不一定把日记标记成 generation_mode=fallback。
 
 图片签名、ReID、场景复核、日记图片复核和家庭外观描述是不同调用。
 它们可能使用同一关键帧，但没有统一的“一张图只读一次”全局保证。
@@ -2184,8 +2507,11 @@ vision 的 loop_type 是 r1，chat 是 r2。
 process 模式会新建真实 OpenAi 客户端，不能假定继承 no_llm 替身。
 
 依据：`service.py:168`、`service.py:356`、`entity/matcher.py:267`。
-派生依据：`journal/calibration.py:84`、`journal/scene_profile.py:225`。
-规律与任务状态：`journal/activity_rhythm.py:1319`、`storage/mysql_repos.py:590`。
+派生依据：`entity/candidate.py:251`、`entity/grounding.py:170`。
+标注与缓存：`entity/text_roles.py:76`、`:107`、`:180`。
+事件与场景：`journal/calibration.py:58`、`journal/scene_profile.py:97`、`:240`。
+裁决：`core/adjudication.py:48`、`journal/care_signals.py:359`。
+规律与任务状态：`journal/activity_rhythm.py:1036`、`:1319`、`storage/mysql_repos.py:590`。
 
 ## F 这些数据如何生成可追溯的日日记
 
@@ -2197,25 +2523,53 @@ process 模式会新建真实 OpenAi 客户端，不能假定继承 no_llm 替�
 ```flow
 当日全部有效来源修订 -&gt; 排序与输入摘要
 排序与输入摘要 -&gt; 生成分块
-生成分块 -&gt; 图片复核与prompt组装
-图片复核与prompt组装 -&gt; 文本模型或静态回退
+生成分块 -&gt; 分块文本排序与预算选图
+分块文本排序与预算选图 -&gt; VLM逐图复核与prompt组装
+VLM逐图复核与prompt组装 -&gt; 文本模型或静态回退
 文本模型或静态回退 -&gt; 分块覆盖账本
 分块覆盖账本 -&gt; 合并结构化日记
-合并结构化日记 -&gt; 实体事件字段回填与证据约束
-实体事件字段回填与证据约束 -&gt; 主动感知与状态标记
+合并结构化日记 -&gt; 实体事件字段回填与图文裁决
+实体事件字段回填与图文裁决 -&gt; 主动感知与状态标记
 主动感知与状态标记 -&gt; [(日记修订与lineage)]: upsert事务
 ```
 
-图片复核根据候选优先级、去重和剩余预算选择图片。
+图片复核先收集带图候选，再用文本 LLM 打 0–10 分。
+模型读取 title、description、ominous，不读取图片像素。
+缺项或非法分数回退规则分，整体失败则回退规则排序。
+然后按排序、去重和剩余预算选择图片，交给 VLM 逐图复核。
 默认预算为一轮日记构建 3 次，分块间累计 ledger。
 新的全日重建并不是自动复用数据库里所有旧复核结论。
+
 复核输出 finding、changed、claims、temporal_context 等信息。
 它们既进入 prompt，也进入可审计的复核账本。
 预算耗尽、重复与失败也有记录，不是凭空得到新视觉结论。
 
+IMAGE_REVIEW_SELECT_LLM_ENABLED 默认开启。
+排序在每个分块内部执行，不是对全日所有图片统一排序。
+前块可能先用完预算，后块的高分图未必能复核。
+预算耗尽时仍可能调用排序模型；0 分也不是排除候选的硬门槛。
+3 次预算限制的是图片复核，不是整条流水线所有模型调用。
+
+**图文冲突如何消解？**
+只处理成功图片复核中 verdict=contradicted 的可见事实主张。
+图片不能推翻来源的 capture_time 等时间字段。
+_claim_match_resolver() 批量配对主张与日记条目或摘要句。
+文本 LLM 判定是否为同一事实，缺项时回退同义词和子串匹配。
+CLAIM_MATCH_LLM_ENABLED 默认开启，输出 match 必须是布尔值。
+
+程序仅移除匹配条目中被否定的来源引用。
+证据数降到零才移除整个结构化条目。
+若条目被移除且无保留条目支持该主张，再清理匹配摘要句。
+
+known_noise_sources 保存图文冲突，meta 保存 image_evidence_constraints。
+冲突处理不修改原始来源修订，也不重写已落库的 Entity 或事件。
+分块生成后和全日合并后都可能执行裁决，没有全局复用保证。
+日记复核排序和冲突匹配的模型配置默认空，复用默认文本模型。
+
 prompt 包含文本记录、复核结论和可用实体、事件、时段、场景、规律。
 R1 的部分字段由代码计算并在生成后回填。
 不是让模型自由发明 entity_id 或替代校准事件。
+代码回填字段也可能依赖前面的模型判断，不代表完全不依赖模型。
 符合确定性 R1 条件时，各块独立生成语义增量，再由代码合并。
 模型失败时用静态摘要回退，并标记内容降级。
 
@@ -2243,7 +2597,7 @@ Entity 的生命周期、置信度和证据仍需要结合读取。
 | journal_lineage | 日记修订到来源修订，或周期总结到来源日记修订 | 能追溯“这句话所在版本用了哪些输入” |
 | journal_generation_run | 一次日级构建的输入摘要、来源数、分块数 | 解释生成用了多少证据 |
 | journal_generation_chunk | 块编号、输入摘要、覆盖来源修订 ID、生成模式 | 验证每条输入是否进入某块 |
-| journal_image_review | 图片复核状态、逐项判断、来源引用、模型和成本等 | 审核视觉判断，不直接保存签名 URL |
+| journal_image_review | 图片复核状态、候选分数、逐项判断、来源引用及复核成本 | 审核视觉判断，不直接保存签名 URL；不完整记录排序模型成本 |
 | bc10_journals_dev 或配置的兼容日记表 | 当前 content、status、meta | 兼容读取，并保存 attention 等元数据 |
 
 写日记的 upsert 将以上相关日记账本写入同一事务。
@@ -2279,7 +2633,8 @@ readiness 由覆盖天数、记录数、时段覆盖、confirmed 事件比例等
 已有 status=ok 的周期总结却不会因此自动全部重压。
 所以“日日记修正”不代表“全部长期总结已同步修正”。
 
-依据：`journal/writer.py:285`、`journal/image_review.py:46`。
+依据：`journal/writer.py:285`、`:485`、`:719`。
+选图与复核：`journal/image_review.py:46`、`:260`、`:287`。
 回填与保存：`service.py:510`、`storage/mysql_repos.py:250`。
 成熟度：`journal/readiness.py:15`、`core/config.py:122`。
 
@@ -2325,6 +2680,17 @@ Entity、场景和规律字段会按代码规则跨来源合并。
 家庭画像会先读取用户全部设备的主档，不只读取本次设备。
 数量估计优先参考同帧最大并发，降低实体碎片被重复计数的影响。
 外观描述和物种判断可按预算调用图片或文本模型。
+
+随后 _annotate_vehicle_categories() 批量读取车辆 semantic 与 appearance。
+文本模型给出类别，_build_vehicles() 优先按该类别聚合。
+失败或缺失类别时，回退语义类型到车辆类别的词表映射。
+VEHICLE_CATEGORY_LLM_ENABLED 默认开启，独立模型默认空。
+
+车辆类别先写在本次内存实体副本，再进入家庭画像。
+此函数没有把新类别单独回写 Entity 主档。
+归类可扫描全部车辆，入画像仍受默认 10 个活跃日门槛限制。
+类别只检查非空并截取 10 字符，没有固定类别枚举校验。
+
 画像还保存 source_day、builder_version、统计量及 species_prior_text。
 跨设备汇总不等于已经实现跨摄像头同一身份的可靠匹配。
 
@@ -2353,7 +2719,7 @@ user_memories 中 memory_type 可为 fact、preference、constraint、decision�
 这些边界决定“本次拉了谁”和“本次加工了谁”可能不同。
 
 依据：`service.py:636`、`journal/consolidation.py:231`。
-画像：`household/profile_builder.py:80`。
+画像：`household/profile_builder.py:81`、`:357`、`:400`。
 R2 模型字段：`specs.py:31`。
 
 ## H 最后生成哪些成果，如何交给调用方
@@ -2451,6 +2817,20 @@ FC 的 sim_pipeline 顶层返回 prepare、writer、journal 三阶段报告。
 Worker failed 大于零、Memory 单项报错或导出警告仍可能存在。
 成功验收必须检查这些明细，并核对目标用户设备的数据库结果。
 
+**最新版本仍需留意哪些边界？**
+
+| 边界 | 当前事实 | 验收时应检查 |
+| --- | --- | --- |
+| 模型成本与 FC 时长 | 新增排序、冲突、提醒和车辆裁决，不能按 3 张图估算全部调用量 | 文本与视觉耗时、限流、重试以及 FC 超时预算 |
+| 候选覆盖 | 空 types 会回退词表；提醒模型只看规则候选 | 否定句、多目标描述、规则未筛出的异常和召回率 |
+| 裁决输入与审计 | 部分裁决只看摘要；没有统一持久化全部新裁决请求和成本 | 不能只凭 generation_mode=generated 认定所有模型阶段成功 |
+| 图片预算 | 分块内排序，前块先占预算；耗尽后仍可能调用排序模型 | 敏感图片是否跨块遗漏；总模型请求数是否符合预期 |
+| 画像类别与旧缓存 | 车辆类别无固定枚举；旧场景结论可继续复用 | 类别漂移、分组碎片和缺少 fixed 的旧场景数据 |
+| 来源与租户范围 | 共享 checkpoint、全库 Job 消费和导出仍未改变 | 新用户设备回填遗漏和非目标用户数据是否进入导出 |
+| 部署版本 | 本地 dev 更新不等于 FC 自动更新，已有 ZIP 可能仍为旧版本 | 重新打包并部署后核对云端版本与环境变量 |
+
+以上是源码边界，不是已经观察到的云端事故。
+
 **用一个例子串起全部对象。**
 以下只是示意，不是当前数据库中的真实事件。
 同一设备 09:00 和 09:01 出现两条相邻投递视频描述。
@@ -2469,8 +2849,10 @@ Worker 用该日全部有效证据生成新日日记修订和 lineage。
 导出：`sim/journal.py:646`、`:670`、`:784`。
 接口差异：`api/fc_handler.py:75`、`api/fastapi_app.py:174`。
 
-本次用 Conda llm 检查相关模块：300 项测试通过，5 项集成测试跳过。
-测试覆盖入口、下载协议、采集、对账、生成、实体、场景、规律和画像等模块。
+本次用 Conda llm 检查相关模块：415 项测试通过，5 项集成测试跳过。
+检查时设置 JOURNAL_ENV=local_test，关闭 FC 与下载集成测试。
+测试覆盖入口、下载协议、采集、对账、生成、实体、场景、规律和画像。
+也覆盖新增角色标注、定位描述、选图、关怀和图文裁决相关行为。
 这些是本地替身验证，不代表真实云端数据和模型链路已验收。
 </textarea>
 <script>

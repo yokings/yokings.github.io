@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 智能体记忆层 · 四套开源方案横向解读</title>
+
+<!-- ===========================================
+     FONTS — Newsreader(serif 400) + Hanken Grotesk(sans) + DM Mono(chrome)
+     CJK pairing: Noto Serif SC 700 for display, 400 for body
+     =========================================== -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..500;1,6..72,400..500&family=Hanken+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ===========================================
+   THEME — Cobalt Grid: cream paper + one cobalt ink
+   =========================================== */
+:root{
+  --paper:#F0EBDE;        /* warm cream canvas */
+  --paper2:#E6E0CE;       /* deeper cream, sparing use */
+  --ink:#1F2BE0;          /* electric cobalt — the only ink */
+  --inksoft:#5560E5;      /* lighter cobalt */
+  --grid:rgba(31,43,224,.10);   /* permanent graph paper */
+  --faint:rgba(31,43,224,.18);  /* row dividers */
+
+  --fd:"Newsreader","Noto Serif SC",Georgia,serif;
+  --fb:"Hanken Grotesk","Noto Serif SC",sans-serif;
+  --fm:"DM Mono","Noto Serif SC",ui-monospace,monospace;
+
+  --edge:80px;            /* slide edge inset */
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+/* ===========================================
+   FIXED 16:9 STAGE — mandatory base (viewport-base.css)
+   =========================================== */
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000;}
+.deck-viewport{position:fixed;inset:0;overflow:hidden;background:#000;}
+.deck-stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;transform-origin:0 0;background:var(--paper);}
+.slide{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden;display:block;visibility:hidden;opacity:0;pointer-events:none;background:var(--paper);}
+.slide.active,.slide.visible{visibility:visible;opacity:1;pointer-events:auto;z-index:1;}
+img,video,canvas,svg{max-width:100%;max-height:100%;}
+.deck-controls{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:1000;}
+@media print{html,body{width:1920px;height:auto;overflow:visible;background:#fff;}.deck-viewport{position:static;overflow:visible;background:#fff;}.deck-stage{position:static;width:auto;height:auto;transform:none!important;background:none;}.slide{position:relative;display:block!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;width:1920px;height:1080px;break-after:page;page-break-after:always;}.slide:last-child{break-after:auto;page-break-after:auto;}.deck-controls{display:none!important;}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.2s!important;}}
+
+/* ===========================================
+   CANVAS — permanent graph paper grid, on the stage, never off
+   =========================================== */
+.deck-stage::before{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(to right,var(--grid) 1px,transparent 1px),
+                   linear-gradient(to bottom,var(--grid) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+.slide{background:transparent;color:var(--ink);font-family:var(--fb);font-weight:400;}
+
+/* Universal chrome frame: two 1.5px cobalt hairlines + page no. + section tag */
+.hair{position:absolute;left:var(--edge);right:var(--edge);height:1.5px;background:var(--ink);z-index:30;}
+.hair.t{top:28px;} .hair.b{bottom:22px;}
+.pg{position:absolute;right:var(--edge);bottom:56px;font-family:var(--fm);font-size:14px;letter-spacing:.06em;color:var(--ink);z-index:31;}
+.sectag{position:absolute;left:var(--edge);bottom:56px;font-family:var(--fm);font-size:13px;letter-spacing:.08em;color:var(--ink);opacity:.55;z-index:31;}
+
+/* Frame: the actual content container, clear of chrome.
+   Flex column lets the closing .note pin to the bottom of the slide. */
+.frame{position:absolute;left:var(--edge);right:var(--edge);top:96px;bottom:118px;z-index:5;
+  display:flex;flex-direction:column;}
+.frame > .note{margin-top:auto;}
+
+/* ===========================================
+   TYPOGRAPHY
+   =========================================== */
+h1,h2,h3,.serif{font-family:var(--fd);font-weight:400;color:var(--ink);letter-spacing:0;line-height:1.05;}
+.hero{font-size:126px;line-height:.98;letter-spacing:-.008em;}
+.chapter{font-size:100px;line-height:1.0;letter-spacing:-.005em;}
+h2{font-size:56px;line-height:1.0;}
+h3{font-size:30px;line-height:1.12;}
+.lede{font-family:var(--fb);font-size:20px;line-height:1.68;color:var(--ink);opacity:.9;}
+.body{font-family:var(--fb);font-size:16.5px;line-height:1.72;}
+.small{font-family:var(--fb);font-size:14.5px;line-height:1.6;}
+.kick{font-family:var(--fb);font-weight:600;font-size:13.5px;letter-spacing:.16em;color:var(--ink);opacity:.75;}
+.kick.cjk{letter-spacing:.06em;}
+.mono{font-family:var(--fm);font-size:14px;letter-spacing:.04em;}
+.mono-s{font-family:var(--fm);font-size:12.5px;letter-spacing:.06em;}
+.dim{opacity:.62;} .dim2{opacity:.45;}
+.hl{background:var(--paper2);padding:0 4px;}
+
+/* ===========================================
+   TOPBAR — Newsreader headline left + mono lab-tag right + 1.5px rule
+   =========================================== */
+.topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:40px;
+  border-bottom:1.5px solid var(--ink);padding-bottom:14px;margin-bottom:26px;}
+.topbar h2{font-size:54px;}
+.topbar .lab{font-family:var(--fm);font-size:14px;letter-spacing:.06em;white-space:nowrap;padding-bottom:6px;}
+
+/* ===========================================
+   COMPONENTS
+   =========================================== */
+.cols{display:grid;gap:26px;}
+.c2{grid-template-columns:1fr 1fr;} .c3{grid-template-columns:repeat(3,1fr);}
+.c4{grid-template-columns:repeat(4,1fr);} .c5{grid-template-columns:repeat(5,1fr);}
+
+.panel{border:1.5px solid var(--ink);padding:22px 24px;}
+.panel.soft{border:1px solid var(--faint);background:rgba(230,224,206,.55);}
+.panel h4{font-family:var(--fd);font-weight:400;font-size:26px;margin-bottom:10px;}
+
+/* index list: num-tag + row-headline + body, faint dividers */
+.idx{display:flex;flex-direction:column;}
+.idx-row{display:grid;grid-template-columns:74px 1fr;gap:20px;padding:14px 0;border-bottom:1px solid var(--faint);align-items:baseline;}
+.idx-row:last-child{border-bottom:0;}
+.num{font-family:var(--fm);font-size:15px;letter-spacing:.04em;}
+.idx-row h4{font-family:var(--fd);font-weight:400;font-size:29px;line-height:1.16;margin-bottom:5px;}
+.idx-row p{font-size:15px;line-height:1.62;opacity:.88;}
+
+/* tables */
+table.tbl{width:100%;border-collapse:collapse;}
+table.tbl th{font-family:var(--fm);font-weight:400;font-size:13px;letter-spacing:.06em;text-align:left;
+  padding:0 12px 10px;border-bottom:1.5px solid var(--ink);vertical-align:bottom;}
+table.tbl td{font-family:var(--fb);font-size:15.5px;line-height:1.5;padding:9px 12px;
+  border-bottom:1px solid var(--faint);vertical-align:top;}
+table.tbl tr:last-child td{border-bottom:0;}
+table.tbl .name{font-family:var(--fd);font-size:19px;}
+table.tbl td.m{font-family:var(--fm);font-size:13.5px;}
+table.tbl.compact td{padding:6px 12px;}
+table.tbl.compact th{padding:0 12px 8px;}
+
+/* code block — mono, comments dimmed; no syntax colour (two-colour rule) */
+pre.code{font-family:var(--fm);font-size:14.5px;line-height:1.72;white-space:pre-wrap;
+  border-left:1.5px solid var(--ink);padding:14px 0 14px 18px;color:var(--ink);}
+pre.code .c{opacity:.5;}
+pre.code .k{font-weight:500;}
+
+/* pixel-glitch column + QR block */
+.glitch{position:absolute;top:0;bottom:0;width:150px;z-index:2;display:flex;flex-direction:column;justify-content:center;gap:7px;pointer-events:none;}
+.glitch i{display:block;height:8px;background:var(--ink);opacity:.85;}
+.glitch.r{right:52px;} .glitch.l{left:52px;}
+.qr{position:absolute;width:86px;height:86px;z-index:6;display:grid;
+  grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);gap:1.5px;
+  background:var(--paper);padding:4px;box-shadow:0 0 0 1.5px var(--paper);}
+.qr span{background:var(--ink);}
+
+/* stage / chip */
+.chip{display:inline-block;border:1.5px solid var(--ink);padding:5px 12px;font-family:var(--fm);font-size:12.5px;letter-spacing:.06em;}
+.chip.fill{background:var(--ink);color:var(--paper);}
+
+/* callout strip */
+.note{border-top:1.5px solid var(--ink);padding-top:14px;font-size:15.5px;line-height:1.6;}
+.note b{font-weight:600;}
+
+/* quadrant 2x2 */
+.quad{position:relative;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+  border:1.5px solid var(--ink);}
+.quad .q{padding:20px 22px;border-right:1px solid var(--faint);border-bottom:1px solid var(--faint);}
+.quad .q:nth-child(2n){border-right:0;}
+.quad .q:nth-child(n+3){border-bottom:0;}
+.quad .q h4{font-family:var(--fd);font-weight:400;font-size:30px;margin-bottom:6px;}
+.quad .q p{font-size:14.5px;line-height:1.55;opacity:.85;}
+
+/* pipeline */
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1.5px solid var(--ink);}
+.pipe .st{padding:18px 18px 0;border-right:1px solid var(--faint);}
+.pipe .st:last-child{border-right:0;}
+.pipe .st .n{font-family:var(--fm);font-size:13px;letter-spacing:.08em;margin-bottom:8px;}
+.pipe .st h4{font-family:var(--fd);font-weight:400;font-size:32px;margin-bottom:4px;}
+.pipe .st .d{font-size:13.5px;line-height:1.5;opacity:.72;margin-bottom:12px;}
+.pipe .st ul{list-style:none;}
+.pipe .st li{font-size:14px;line-height:1.5;padding:6px 0;border-top:1px solid var(--faint);}
+.pipe .st li b{font-family:var(--fm);font-size:12.5px;font-weight:500;margin-right:6px;}
+
+/* verdict columns */
+.vd{border-top:1.5px solid var(--ink);padding-top:16px;}
+.vd .vh{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;}
+.vd .vh h4{font-family:var(--fd);font-weight:400;font-size:30px;}
+.vd .vh .mk{font-family:var(--fd);font-size:34px;}
+.vd dl{display:grid;grid-template-columns:62px 1fr;gap:6px 10px;font-size:13.5px;line-height:1.5;}
+.vd dt{font-family:var(--fm);font-size:12px;opacity:.6;padding-top:3px;}
+.vd dd{margin:0;}
+.vd .verdict{margin-top:12px;padding-top:10px;border-top:1px solid var(--faint);font-size:14px;line-height:1.55;}
+
+/* verdict columns stretch + airy variants for list-type slides */
+.vd{display:flex;flex-direction:column;}
+.vd .verdict{margin-top:auto;}
+.slide.airy .vd dl{flex:1;align-content:space-evenly;row-gap:0;font-size:16px;line-height:1.6;}
+.slide.airy .vd .vh h4{font-size:38px;}
+.slide.airy .vd .vh .mk{font-size:44px;}
+.slide.airy .vd .verdict{font-size:15px;}
+.showdown5{grid-template-columns:repeat(5,1fr);}
+.showdown5 .vd .vh h4{font-size:32px;}
+.showdown5 .vd dl{grid-template-columns:54px 1fr;font-size:13px;}
+.showdown5 .vd .verdict{font-size:13px;}
+.slide.airy .panel ul.b li{font-size:15px;line-height:1.7;}
+.slide.airy .panel > .small{font-size:15px;line-height:1.7;}
+.slide.airy .panel .chip{font-size:13.5px;}
+.slide.airy .cols{flex:1;align-items:stretch;}
+.slide.airy .panel{display:flex;flex-direction:column;justify-content:space-evenly;}
+.slide.airy .panel ul.b{flex:1;display:flex;flex-direction:column;justify-content:space-evenly;}
+.slide.airy .idx{flex:1;}
+.slide.airy .idx-row{flex:1;align-items:center;padding:10px 0;}
+.slide.airy .lede{font-size:21px;}
+
+/* bullet list */
+ul.b{list-style:none;} ul.b li{font-size:14.5px;line-height:1.6;padding:5px 0 5px 16px;position:relative;}
+ul.b li::before{content:'—';position:absolute;left:0;opacity:.5;font-family:var(--fm);}
+
+/* ===========================================
+   ANIMATION — staggered reveals, triggered on activation
+   =========================================== */
+.reveal{opacity:0;transform:translateY(24px);
+  transition:opacity .62s var(--ease),transform .62s var(--ease);}
+.slide.visible .reveal{opacity:1;transform:translateY(0);}
+.glitch i{transform:scaleX(0);transform-origin:right;transition:transform .55s var(--ease);}
+.slide.visible .glitch i{transform:scaleX(1);}
+.glitch.l i{transform-origin:left;}
+.hero-mask{display:inline-block;}
+.slide{transition:opacity .28s linear;}
+
+/* ===========================================
+   OUT-OF-STAGE UI
+   =========================================== */
+.hint{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:1000;
+  font-family:var(--fm);font-size:11.5px;letter-spacing:.1em;color:rgba(240,235,222,.5);}
+.pbar{position:fixed;left:0;bottom:0;height:2px;background:var(--ink);z-index:1001;transition:width .28s var(--ease);}
+.edit-hotzone{position:fixed;top:0;left:0;width:80px;height:80px;z-index:10000;cursor:pointer;}
+.edit-toggle{position:fixed;top:16px;left:16px;z-index:10001;opacity:0;pointer-events:none;
+  transition:opacity .3s ease;background:var(--paper);color:var(--ink);border:1.5px solid var(--ink);
+  font-family:var(--fm);font-size:12px;padding:6px 10px;cursor:pointer;}
+.edit-toggle.show,.edit-toggle.active{opacity:1;pointer-events:auto;}
+[contenteditable="true"]{outline:1px dashed var(--ink);outline-offset:2px;}
+</style>
+</head>
+<body>
+
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage">
+
+<!-- ============================================================
+     S01 · COVER
+     ============================================================ -->
+<section class="slide" data-sec="封面">
+  <div class="glitch r" data-glitch="1"></div>
+  <div class="qr" style="right:150px;top:150px;" data-qr="7"></div>
+  <div class="frame">
+    <div class="kick cjk reveal">开源项目横向解读 · 数据抓取于 2026-09-22</div>
+    <h1 class="hero reveal" style="margin:22px 0 6px;">AI 智能体<span style="font-style:italic;">记忆层</span></h1>
+    <div class="lede reveal" style="max-width:1200px;margin-bottom:34px;">五套开源方案的核心思想、技术架构与组件实现</div>
+    <div class="idx reveal" style="width:1080px;">
+      <div class="idx-row"><span class="num">01</span><div><h4>Mem0</h4><p>产品化记忆基础设施　pip install 即用的通用记忆层</p></div></div>
+      <div class="idx-row"><span class="num">02</span><div><h4>Hindsight-CN</h4><p>中文优化记忆库　模型内嵌镜像，可完全离线</p></div></div>
+      <div class="idx-row"><span class="num">03</span><div><h4>Zep / Graphiti</h4><p>时序知识图引擎　事实带有效窗口，冲突自动失效</p></div></div>
+      <div class="idx-row"><span class="num">04</span><div><h4>Honcho-CN</h4><p>推理型外置记忆服务　按组件换模型，国内模型原生适配</p></div></div>
+      <div class="idx-row"><span class="num">05</span><div><h4>T-Mem</h4><p>联想式记忆架构　EMNLP 2026 Main Conference</p></div></div>
+    </div>
+    <div class="note reveal" style="margin-top:30px;max-width:1180px;">
+      <b>贯穿全篇的 Mock 案例</b>　前端负责人「张伟」的 4 条真实感对话，用同一个场景演示五个系统的写入、存储与召回差异。
+      文中业务数据均为构造的演示数据；Star 数、评测分数与架构描述来自各项目 README 及官方文档。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S02 · 全景 — 四种记忆观
+     ============================================================ -->
+<section class="slide" data-sec="全景定位">
+  <div class="frame">
+    <div class="topbar reveal"><h2>五个项目，五种对「记忆是什么」的回答</h2><span class="lab">MEMORY WORLDVIEW · 2×2</span></div>
+    <div class="lede reveal" style="margin-bottom:22px;">同样是「记住用户」，它们对记忆的形态、获取方式与成本取舍完全不同</div>
+    <div class="cols c2 reveal" style="gap:34px;align-items:stretch;">
+      <div style="display:flex;flex-direction:column;">
+        <div class="mono-s dim" style="margin-bottom:8px;">结构化 · 认知 ↑　　／　　纵轴：记忆结构</div>
+        <div class="quad" style="flex:1;">
+          <div class="q"><h4>Honcho-CN</h4><p>形式逻辑推理<br>结论是「推」出来的</p></div>
+          <div class="q" style="display:flex;flex-direction:column;justify-content:center;gap:16px;">
+            <div><h4>T-Mem</h4><p>写入期预埋 Trigger<br>覆盖联想式召回</p></div>
+            <div style="border-top:1px solid var(--faint);padding-top:16px;"><h4>Zep / Graphiti</h4><p>时序知识图<br>事实带有效窗口，冲突自动失效</p></div>
+          </div>
+          <div class="q"><h4>Mem0</h4><p>扁平事实 + 多信号融合<br>最快接入，生态最全</p></div>
+          <div class="q"><h4>Hindsight-CN</h4><p>四类记忆 + 四路检索<br>中文内嵌，可离线运行</p></div>
+        </div>
+        <div class="mono-s dim" style="margin-top:8px;">扁平 · 事实 ↓</div>
+        <div class="mono-s dim" style="display:flex;justify-content:space-between;margin-top:16px;">
+          <span>← 研究原型 / 需自建</span><span>开箱即用 / 托管化 →</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;">
+        <div class="small reveal" style="margin-bottom:16px;"><b style="font-weight:600;">坐标轴怎么读</b></div>
+        <ul class="b" style="margin-bottom:22px;">
+          <li><b style="font-weight:600;">横轴　接入成本</b>　越靠右，越接近「装完就能用」</li>
+          <li><b style="font-weight:600;">纵轴　记忆结构</b>　越靠上，记忆越像「可推理的认知结构」，而非「可检索的文本片段」</li>
+          <li><b style="font-weight:600;">规律</b>　向右 → 省工程；向上 → 更聪明，但对 LLM 调用、延迟与费用的依赖同步上升</li>
+        </ul>
+        <div class="small" style="margin-bottom:14px;"><b style="font-weight:600;">一句话区分</b></div>
+        <div class="panel soft" style="flex:1;display:flex;flex-direction:column;">
+          <div class="idx" style="flex:1;display:flex;flex-direction:column;justify-content:space-evenly;gap:0;">
+            <div class="idx-row" style="grid-template-columns:120px 1fr;"><span class="num">Mem0</span><div><p>把记忆做成一层「基础设施」</p></div></div>
+            <div class="idx-row" style="grid-template-columns:120px 1fr;"><span class="num">Hindsight</span><div><p>把记忆做成一个「可分类型、可反思的大脑」</p></div></div>
+            <div class="idx-row" style="grid-template-columns:120px 1fr;"><span class="num">Zep</span><div><p>把记忆建成一张「会随时间自我修订的知识图」</p></div></div>
+            <div class="idx-row" style="grid-template-columns:120px 1fr;"><span class="num">Honcho</span><div><p>把记忆做成一台「持续推理的机器」</p></div></div>
+            <div class="idx-row" style="grid-template-columns:120px 1fr;"><span class="num">T-Mem</span><div><p>把记忆做成一张「带引信的图」，写入时就把未来的提问方式埋好</p></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S03 · 十维对照表
+     ============================================================ -->
+<section class="slide" data-sec="速览对比">
+  <div class="frame">
+    <div class="topbar reveal"><h2>一张表看清五个项目的骨架差异</h2><span class="lab">SIDE BY SIDE · 9 DIMENSIONS · 2026-09-22</span></div>
+    <div class="small dim reveal" style="margin-bottom:18px;">Star 数为 2026-09-22 实测；评测分数均引自各项目 README，协议不同不可直接横比</div>
+    <table class="tbl reveal">
+      <colgroup><col style="width:130px"><col style="width:312px"><col style="width:312px"><col style="width:312px"><col style="width:312px"><col style="width:312px"></colgroup>
+      <thead><tr><th>维度</th><th>Mem0</th><th>Hindsight-CN</th><th>Zep / Graphiti</th><th>Honcho-CN</th><th>T-Mem</th></tr></thead>
+      <tbody>
+        <tr><td class="name">身份</td><td>独立产品，公司化运营</td><td>Zep Cloud 的开源核心 Graphiti<br>（本仓仅为示例与集成）</td><td>Plastic Labs Honcho 的国内适配版</td><td>学术论文官方实现 / EMNLP 2026 Main</td></tr>
+        <tr><td class="name">Star</td><td class="m">65,793</td><td class="m">4,927（Graphiti 31,081）</td><td class="m">6</td><td class="m">131</td></tr>
+        <tr><td class="name">交付形态</td><td>Python / TS SDK / 自托管 Server / 云</td><td>pip graphiti-core 自托管 / Zep Cloud 托管<br>MCP + REST 服务</td><td>Docker Compose / 四容器服务 + CLI</td><td>离线流水线 / build → eval 脚本</td></tr>
+        <tr><td class="name">记忆原子</td><td>事实 fact（实体 + 时间标注）</td><td>Episode（原始溯源）/ Entity（节点）<br>Fact（带有效窗口的边）</td><td>Peer Representation<br>（显式·演绎·归纳结论）</td><td>Scene（场景）/ Item（原子事实）/ Trigger（触发器）</td></tr>
+        <tr><td class="name">写入机制</td><td>单遍 LLM 抽取<br>ADD-only，不 UPDATE</td><td>Episode 入图 → 抽实体与事实边<br>→ 去重 → 冲突自动时序失效</td><td>消息入队 → Deriver 异步按序推理</td><td>分段 → 主题 → 原子项 → 预生成四类 Trigger</td></tr>
+        <tr><td class="name">检索信号</td><td>语义 + BM25 + 实体 + 时间推理，融合排序</td><td>语义 + BM25 + 图遍历三路混合<br>图距离 / cross-encoder 重排</td><td>dialectic API 分档<br>基于表示做推理式回答</td><td>BM25 + 向量 + Trigger 增强<br>层级 topic → scene → item</td></tr>
+        <tr><td class="name">反思能力</td><td>弱（靠时间推理裁决冲突）</td><td>无独立反思层<br>靠事实失效 + 实体摘要演进</td><td>核心：Dream 定期 consolidate + 归纳演绎</td><td>写入期 rehearsal<br>把反思前移到写入时</td></tr>
+        <tr><td class="name">部署与成本</td><td>pip / docker / 托管云<br>按调用计费</td><td>自带图数据库（Neo4j / FalkorDB / Neptune）<br>SEMAPHORE_LIMIT 控并发</td><td>docker compose up<br>PostgreSQL + Redis</td><td>本地脚本 + OpenAI 兼容端点，需控并发</td></tr>
+        <tr><td class="name">中文友好度</td><td>一般，取决于所选 embedding / LLM</td><td>一般，可接 OpenAI 兼容端点<br>embedding 需自选</td><td>强：DeepSeek / MiniMax / Mimo 原生适配 + 中文文档</td><td>一般，可接国产 OpenAI 兼容端点</td></tr>
+      </tbody>
+    </table>
+    <div class="note reveal" style="margin-top:18px;">
+      <b>读法</b>　Mem0 胜在「工程完备度」，Hindsight-CN 胜在「中文与离线」，Zep 胜在「时间与溯源」，Honcho-CN 胜在「推理深度」，T-Mem 胜在「召回覆盖率」。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S04 · 四段流水线
+     ============================================================ -->
+<section class="slide" data-sec="共同底座">
+  <div class="frame">
+    <div class="topbar reveal"><h2>再不同的记忆系统，也逃不出这四段</h2><span class="lab">RETAIN → STORE → RECALL → REFLECT</span></div>
+    <div class="lede reveal" style="margin-bottom:24px;">五个项目的差异，本质是这四段各自的取舍不同</div>
+    <div class="pipe reveal">
+      <div class="st">
+        <div class="n">01</div><h4>Retain</h4><div class="d">写入与抽取<br>把原始对话变成可检索的知识单元</div>
+        <ul><li><b>Mem0</b>单遍 LLM 抽取，只 ADD 不 UPDATE</li><li><b>Hindsight</b>抽取事实 / 实体 / 关系并归入四类</li><li><b>Honcho</b>消息入队，Deriver 异步做显式 + 演绎</li><li><b>T-Mem</b>分场景 → 抽原子项 → 预生成 Trigger</li><li><b>Zep</b>Episode 入图，抽实体 + 带有效窗口的事实边</li></ul>
+      </div>
+      <div class="st">
+        <div class="n">02</div><h4>Store</h4><div class="d">存储与组织<br>决定「记忆以什么结构被留下」</div>
+        <ul><li><b>Mem0</b>向量库 + 实体索引，User/Session/Agent 三级</li><li><b>Hindsight</b>隔离 Bank（每个 Agent 一个大脑）+ 图谱</li><li><b>Honcho</b>PostgreSQL + 向量集合，按 Peer 组织</li><li><b>T-Mem</b>类型分隔图：scene / item / topic / trigger / persona</li><li><b>Zep</b>时序图：Episode / Entity / Fact + 本体 + 社区</li></ul>
+      </div>
+      <div class="st">
+        <div class="n">03</div><h4>Recall</h4><div class="d">检索与融合<br>决定「什么问题能召回到什么」</div>
+        <ul><li><b>Mem0</b>语义 + BM25 + 实体多信号融合 + 时间推理</li><li><b>Hindsight</b>四路并行（含图谱路）+ Reranker 重排</li><li><b>Honcho</b>dialectic 分档，按表示做推理式检索</li><li><b>T-Mem</b>层级检索 + Trigger 增强 + RRF 融合</li><li><b>Zep</b>语义 + BM25 + 图遍历，图距离重排</li></ul>
+      </div>
+      <div class="st">
+        <div class="n">04</div><h4>Reflect</h4><div class="d">反思与利用<br>决定「系统能否说出没被明说的话」</div>
+        <ul><li><b>Mem0</b>弱：由时间推理裁决新旧冲突</li><li><b>Hindsight</b>Reflect 操作，生成情境感知分析</li><li><b>Honcho</b>Dream：consolidate + 演绎 + 归纳</li><li><b>T-Mem</b>写入期 rehearsal：提前预演未来提问</li><li><b>Zep</b>无独立反思层：靠事实失效 + 实体摘要演进</li></ul>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:26px;">
+      <b>关键洞察</b>　前三段（写入 / 存储 / 检索）五个项目都在做，差异在「深度」；真正的分水岭是第四段 —— 谁愿意为「没被明说的话」付出额外算力。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S05 · Mock 数据
+     ============================================================ -->
+<section class="slide" data-sec="贯穿案例">
+  <div class="frame">
+    <div class="topbar reveal"><h2>同一份数据，喂给五个系统</h2><span class="lab">MOCK CORPUS · 4 MESSAGES / 4 QUESTIONS</span></div>
+    <div class="lede reveal" style="margin-bottom:22px;">下面每个项目都会用这份数据演示：它存下了什么、又答得出什么</div>
+    <div class="cols c2 reveal" style="gap:30px;align-items:start;">
+      <div>
+        <div class="panel" style="margin-bottom:18px;">
+          <h4>用户档案（Mock）</h4>
+          <div class="small" style="line-height:1.75;">
+            <b style="font-weight:600;font-size:19px;font-family:var(--fd);">张伟</b>　跨境电商 SaaS 后台「Orca」前端负责人<br>
+            <span class="mono-s dim">user_id zhangwei · bank zhangwei · peer zhangwei · workspace orca-team</span><br>
+            <span class="dim">会话数　1 个 session，4 条消息</span>
+          </div>
+        </div>
+        <div class="small dim" style="margin-bottom:14px;">原始对话输入</div>
+        <div class="idx">
+          <div class="idx-row" style="grid-template-columns:110px 1fr;"><span class="num">09-08 10:12</span><div><p>我们在做跨境电商 SaaS 后台，前端我定的 Vue 3 + TypeScript，状态管理用 Pinia，不用 Vuex。</p></div></div>
+          <div class="idx-row" style="grid-template-columns:110px 1fr;"><span class="num">09-15 20:40</span><div><p>上周去北京出差，见了个做物流系统的客户，他们吐槽最多的是报关流程太慢。</p></div></div>
+          <div class="idx-row" style="grid-template-columns:110px 1fr;"><span class="num">09-18 09:05</span><div><p>新同事写 class 组件我退回了几次，我们统一用 Composition API。</p></div></div>
+          <div class="idx-row" style="grid-template-columns:110px 1fr;"><span class="num">09-21 17:30</span><div><p>v1.0 定在 10 月中旬上线，现在最大风险是支付对接还没联调完。</p></div></div>
+        </div>
+        <div class="small dim" style="margin-top:14px;">五个系统分别用各自的标识体系引用同一人：Mem0 用 user_id，Hindsight 用 bank，Zep 用 group_id，Honcho 用 peer，T-Mem 用 speaker。</div>
+      </div>
+      <div>
+        <div class="small dim" style="margin-bottom:14px;">四个测试问题（难度递增）</div>
+        <div class="panel soft" style="padding:0;">
+          <div class="idx" style="padding:0 22px;">
+            <div class="idx-row" style="grid-template-columns:130px 1fr;"><span class="num">Q1 描述型</span><div><h4>我们前端状态管理用哪个库？</h4><p>与原文高度词面重合，所有系统都应答出</p></div></div>
+            <div class="idx-row" style="grid-template-columns:130px 1fr;"><span class="num">Q2 时间型</span><div><h4>我上一次出差是什么时候、见了谁？</h4><p>需要时序推理与事件抽取</p></div></div>
+            <div class="idx-row" style="grid-template-columns:130px 1fr;"><span class="num">Q3 推理型</span><div><h4>v1.0 最可能卡在哪个环节？</h4><p>需要跨事实演绎，而非单纯召回</p></div></div>
+            <div class="idx-row" style="grid-template-columns:130px 1fr;"><span class="num">Q4 联想型</span><div><h4>客户抱怨的根源，和我们架构上的薄弱点是一类问题吗？</h4><p>与任何记忆都无词面重合 —— 真正的分水岭</p></div></div>
+          </div>
+        </div>
+        <div class="note" style="margin-top:22px;">
+          <b>请记住 Q4</b>　它问的不是「报关」也不是「支付」，而是两者之间的隐含关系。这个决定了五个系统的高下。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S06 · CHAPTER DIVIDERS
+     ============================================================ -->
+<section class="slide" data-sec="01 Mem0">
+  <div class="glitch r" data-glitch="2"></div>
+  <div class="qr" style="right:170px;top:170px;" data-qr="3"></div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;">
+    <div class="kick cjk reveal">01 · github.com/mem0ai/mem0</div>
+    <h1 class="chapter reveal" style="margin:20px 0 10px;">Mem0</h1>
+    <div class="mono-s dim reveal">65,793 stars · Python · 2026-04 发布新一代记忆算法 · arXiv:2504.19413</div>
+    <div style="width:300px;height:1.5px;background:var(--ink);margin:34px 0;" class="reveal"></div>
+    <h3 class="reveal" style="font-size:38px;line-height:1.4;max-width:1180px;">核心论点　把记忆做成一层基础设施 —— 一次 pip install，就能给任何 Agent 加上跨会话的长期记忆。</h3>
+    <div class="reveal" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:40px;">
+      <span class="chip fill">65,793 ★ · 生态最完整</span>
+      <span class="chip">Python + TypeScript 双 SDK</span>
+      <span class="chip">单遍 ADD-only 抽取</span>
+      <span class="chip">语义+BM25+实体+时间 多信号融合</span>
+      <span class="chip">Library / 自托管 / 云 三种形态</span>
+    </div>
+    <div class="mono-s dim reveal" style="margin-top:44px;">接下来三页：核心思想 → 架构与组件实现 → Mock 数据演示与差异化</div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S07 · Mem0 核心思想
+     ============================================================ -->
+<section class="slide" data-sec="Mem0 · 核心思想">
+  <div class="frame">
+    <div class="topbar reveal"><h2>2026 年新记忆算法的五条设计原则</h2><span class="lab">FIVE PRINCIPLES · arXiv:2504.19413</span></div>
+    <div class="lede reveal" style="margin-bottom:20px;">核心判断：记忆的难点不在「存」，而在「事后还能以正确的方式被找到」</div>
+    <div class="idx reveal">
+      <div class="idx-row"><span class="num">ADD</span><div><h4>Single-pass ADD-only　一次 LLM 调用完成抽取，不做 UPDATE / DELETE</h4><p>记忆只累积、不覆盖。冲突不在写入时裁决，而留给检索时的时间推理去判断「哪条才是最新的」。</p></div></div>
+      <div class="idx-row"><span class="num">AGT</span><div><h4>Agent-generated facts 一等公民　Agent 自己确认过的动作，与用户说的话同等权重入库</h4><p>避免「只有用户说过的才算数」造成的记忆缺失：Agent 执行结果、工具返回值同样是事实来源。</p></div></div>
+      <div class="idx-row"><span class="num">ENT</span><div><h4>Entity Linking　事实中的实体被抽出、向量化，并跨记忆互相链接</h4><p>把扁平事实串成一张松散的实体图，让「张三的技术栈」这类跨事实问题有路可走。</p></div></div>
+      <div class="idx-row"><span class="num">SIG</span><div><h4>Multi-signal Retrieval　语义 + BM25 关键词 + 实体匹配并行打分后融合</h4><p>单靠向量会漏掉精确词面匹配（如专有名词、型号），单靠关键词又受不了同义改写；三路互补。</p></div></div>
+      <div class="idx-row"><span class="num">TMP</span><div><h4>Temporal Reasoning　带时间维度的检索，区分当前状态 / 过去事件 / 未来计划</h4><p>这是 ADD-only 能成立的前提：既然不覆盖旧记忆，就必须能在检索时分辨「曾经是」和「现在是」。</p></div></div>
+    </div>
+    <div class="cols c2 reveal" style="gap:30px;margin-top:22px;">
+      <div class="small"><b style="font-weight:600;">为什么是 ADD-only？</b>　传统做法在写入时做 UPDATE：新信息到来 → 找到旧记忆 → 改写它。问题是「改写得对不对」当场无法验证，一旦改错，原始信息永久丢失。Mem0 的做法：全部追加，保留完整时间线，把「以哪条为准」推迟到检索阶段，用时间推理裁决。代价是存储膨胀与去重压力，收益是可追溯、不会误删。</div>
+      <div class="small" style="border-left:1px solid rgba(31,43,224,.28);padding-left:22px;"><b style="font-weight:600;">论文与工程的关系</b>　Mem0 有正式论文（arXiv:2504.19413），但产品化的优先级高于学术复现：README 明确说明公开基准分数来自其托管平台（含专有优化），开源 SDK 与之存在差距。选型时要把这个差预期算进去。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S08 · Mem0 技术架构
+     ============================================================ -->
+<section class="slide" data-sec="Mem0 · 技术架构">
+  <div class="frame">
+    <div class="topbar reveal"><h2>三种部署形态 + 一个多级记忆模型</h2><span class="lab">ARCHITECTURE · SDK / SERVER / CLOUD</span></div>
+    <div class="lede reveal" style="margin-bottom:14px;">从 pip 装包到托管云，同一套 API 语义不变；记忆天然分为 User / Session / Agent 三层</div>
+    <div class="cols c3 reveal" style="gap:22px;margin-bottom:16px;">
+      <div class="panel"><h4>Library（SDK）</h4><div class="mono-s dim" style="margin-bottom:8px;">pip install mem0ai</div><div class="small">测试与原型　进程内直连向量库<br>→ 无需服务，最快验证</div></div>
+      <div class="panel"><h4>Self-Hosted Server</h4><div class="mono-s dim" style="margin-bottom:8px;">cd server && docker compose up</div><div class="small">团队自有基础设施　Next.js 控制台 + API Key<br>→ 有面板、有鉴权</div></div>
+      <div class="panel"><h4>Cloud Platform</h4><div class="mono-s dim" style="margin-bottom:8px;">app.mem0.ai 注册取 Key</div><div class="small">零运维生产使用　全部高级特性<br>→ 含托管平台专有优化</div></div>
+    </div>
+    <div class="small dim reveal" style="margin-bottom:6px;">多级记忆模型：同一套 API，三种作用域</div>
+    <div class="cols c3 reveal" style="gap:22px;margin-bottom:16px;">
+      <div style="border-top:1.5px solid var(--ink);padding-top:12px;"><div class="kick cjk" style="margin-bottom:6px;">User 级</div><div class="small">跨会话长期偏好<br>「张伟偏好 Composition API」</div></div>
+      <div style="border-top:1.5px solid var(--ink);padding-top:12px;"><div class="kick cjk" style="margin-bottom:6px;">Session 级</div><div class="small">当前会话上下文<br>「本次在讨论 v1.0 排期」</div></div>
+      <div style="border-top:1.5px solid var(--ink);padding-top:12px;"><div class="kick cjk" style="margin-bottom:6px;">Agent 级</div><div class="small">Agent 自身状态<br>「已执行过支付联调检查」</div></div>
+    </div>
+    <div class="small dim reveal" style="margin-bottom:6px;">仓库核心组件</div>
+    <table class="tbl compact reveal">
+      <colgroup><col style="width:260px"><col style="width:420px"><col style="width:1060px"></colgroup>
+      <thead><tr><th>目录 / 组件</th><th>职责</th><th>关键点</th></tr></thead>
+      <tbody>
+        <tr><td class="name">mem0/</td><td>Python 核心 SDK</td><td>Memory 类：add / search / get_all；可插拔 LLM、Embedding、向量库</td></tr>
+        <tr><td class="name">mem0-ts/</td><td>TypeScript SDK</td><td>与 Python 端同语义，面向 Node / 前端 Agent</td></tr>
+        <tr><td class="name">server/</td><td>自托管服务端</td><td>Next.js 实现，提供控制台、鉴权与 API Key 管理</td></tr>
+        <tr><td class="name">cli/ · @mem0/cli</td><td>命令行记忆工具</td><td>mem0 init / add / search；支持 --agent 无邮箱自助注册</td></tr>
+        <tr><td class="name">integrations/</td><td>框架适配层</td><td>LangGraph、CrewAI 等 Agent 框架的直接接入</td></tr>
+        <tr><td class="name">skills/</td><td>Agent Skills</td><td>Reference skills（常驻知识）+ Pipeline skills（按需工作流）</td></tr>
+        <tr><td class="name">evaluation/</td><td>评测子模块</td><td>指向 mem0ai/memory-benchmarks</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================
+     S09 · Mem0 Mock 演示
+     ============================================================ -->
+<section class="slide" data-sec="Mem0 · Mock 演示">
+  <div class="frame">
+    <div class="topbar reveal"><h2>张伟的 4 条对话，Mem0 存成了什么</h2><span class="lab">MOCK RUN · ADD → FACT → RETRIEVE</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">左侧是 add() 的写入结果，右侧是同一个问题在不同信号下的召回打分</div>
+    <div class="cols c2 reveal" style="gap:34px;align-items:start;">
+      <div>
+        <pre class="code"><span class="c"># 写入：单遍 LLM 抽取，只 ADD 不 UPDATE</span>
+m.add(messages, user_id=<span class="k">"zhangwei"</span>,
+      metadata={<span class="k">"project"</span>: <span class="k">"orca"</span>})
+
+<span class="c"># → 抽取出的 4 条事实（fact）</span>
+F1 [user] 跨境电商 SaaS 后台「Orca」，
+    前端 Vue 3 + TypeScript + Pinia（弃用 Vuex）
+F2 [user] 2026-09 中旬赴北京出差，拜访物流行业客户
+    temporal: event_time = 2026-09-15
+F3 [user] 团队编码规范：统一 Composition API，
+    拒绝 class 组件
+F4 [user] v1.0 目标 2026-10 中旬上线；
+    当前阻塞项 = 支付对接未联调
+    temporal: plan_time  = 2026-10-15
+
+<span class="c"># 实体链接：跨记忆互链的实体索引</span>
+{张伟} ─参与→ {Orca 项目} ─技术栈→ {Vue 3, TS, Pinia}
+{张伟} ─出差→ 北京 ─拜访→ 物流客户 ─痛点→ 报关流程</pre>
+      </div>
+      <div>
+        <div class="small reveal" style="margin-bottom:8px;"><b style="font-weight:600;">Q1（描述型）· 三信号融合</b>　Query：「我们前端状态管理用哪个库？」</div>
+        <table class="tbl reveal" style="margin-bottom:22px;">
+          <colgroup><col style="width:200px"><col style="width:430px"><col style="width:170px"></colgroup>
+          <thead><tr><th>信号</th><th>命中</th><th>得分</th></tr></thead>
+          <tbody>
+            <tr><td>语义向量</td><td>F1「状态管理用 Pinia」</td><td class="m">0.88</td></tr>
+            <tr><td>BM25 关键词</td><td>「状态管理」「Pinia」精确命中</td><td class="m">0.94</td></tr>
+            <tr><td>实体 + 融合</td><td>Pinia ∈ {Orca 技术栈} → F1 第一</td><td class="m">0.93 ✓</td></tr>
+          </tbody>
+        </table>
+        <div class="small reveal" style="margin-bottom:8px;"><b style="font-weight:600;">Q4（联想型）· 失分现场</b>　Query：「客户抱怨的根源和我们架构薄弱点是一类问题吗？」</div>
+        <table class="tbl reveal">
+          <colgroup><col style="width:200px"><col style="width:430px"><col style="width:170px"></colgroup>
+          <thead><tr><th>信号</th><th>命中</th><th>得分</th></tr></thead>
+          <tbody>
+            <tr><td>语义向量</td><td>「报关」↔「支付」语义距离远</td><td class="m">0.41</td></tr>
+            <tr><td>BM25 + 实体</td><td>与任一 fact 无词面重合</td><td class="m">0.06</td></tr>
+            <tr><td>融合结果</td><td>仅召回 F4，答不出 D2 的关联</td><td class="m">0.31 ✗</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:20px;">
+      <b>Mem0 的差异化特点</b>　① 生态与工程完备度第一：Python/TS 双 SDK、CLI、控制台、编码 Agent 插件 —— 唯一能直接进生产的方案。② 检索信号最全：语义 + BM25 + 实体 + 时间推理四路融合，擅长区分当前状态 / 过去事件 / 未来计划。③ 代价：记忆是扁平事实，缺显式图谱与独立反思层，联想型问题（Q4）召回不足 —— 这正是 T-Mem 要补的缺口。
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-sec="02 Hindsight-CN">
+  <div class="glitch r" data-glitch="3"></div>
+  <div class="qr" style="right:170px;top:170px;" data-qr="5"></div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;">
+    <div class="kick cjk reveal">02 · github.com/vulnnull/hindsight-cn</div>
+    <h1 class="chapter reveal" style="margin:20px 0 10px;">Hindsight-CN</h1>
+    <div class="mono-s dim reveal">13 stars（上游 24,719） · Python · 每日自动同步上游更新 · 上游论文 arXiv:2512.12818</div>
+    <div style="width:300px;height:1.5px;background:var(--ink);margin:34px 0;" class="reveal"></div>
+    <h3 class="reveal" style="font-size:38px;line-height:1.4;max-width:1180px;">核心论点　记忆不是对话日志，而是一个分了类的、可反思的「大脑」—— 并且中文开箱即用，模型内嵌可离线。</h3>
+    <div class="reveal" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:40px;">
+      <span class="chip fill">上游 vectorize-io/hindsight 24,719 ★</span>
+      <span class="chip">四类记忆：常识/经历/观察/思维模型</span>
+      <span class="chip">Retain · Recall · Reflect 三操作</span>
+      <span class="chip">四路并行检索 + Reranker</span>
+      <span class="chip">bge-small-zh 内嵌，约 550MB</span>
+    </div>
+    <div class="mono-s dim reveal" style="margin-top:44px;">接下来三页：核心思想 → 架构与组件实现 → Mock 数据演示与差异化</div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S11 · Hindsight 核心思想
+     ============================================================ -->
+<section class="slide" data-sec="Hindsight-CN · 核心思想">
+  <div class="frame">
+    <div class="topbar reveal"><h2>记忆分四类，操作只有三个</h2><span class="lab">FOUR MEMORY TYPES · THREE OPERATIONS</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">核心判断：人类记忆不是一锅粥，世界常识、亲身经历、即时观察、思维模型本就该分开存放</div>
+    <div class="small dim reveal" style="margin-bottom:10px;">四种记忆类型 —— 这是它区别于 Mem0 扁平事实的根本</div>
+    <div class="cols c4 reveal" style="gap:18px;margin-bottom:26px;">
+      <div class="panel"><div class="kick cjk" style="margin-bottom:6px;">世界常识 world</div><div class="small" style="margin-bottom:8px;">普遍知识，不因个体而变</div><div class="small dim">示例<br>「跨境电商 SaaS 通常涉及报关与跨境支付等外部流程」</div></div>
+      <div class="panel"><div class="kick cjk" style="margin-bottom:6px;">交互记录 experience</div><div class="small" style="margin-bottom:8px;">个体的亲身经历，带时间</div><div class="small dim">示例<br>「2026-09 中旬赴北京出差，拜访物流客户」</div></div>
+      <div class="panel"><div class="kick cjk" style="margin-bottom:6px;">观察 observation</div><div class="small" style="margin-bottom:8px;">从对话中即时提取的状态</div><div class="small dim">示例<br>「v1.0 当前阻塞在支付对接未联调」</div></div>
+      <div class="panel"><div class="kick cjk" style="margin-bottom:6px;">思维模型 mental model</div><div class="small" style="margin-bottom:8px;">认知层面的偏好与判断</div><div class="small dim">示例<br>「偏好 Composition API，反对 class 组件写法」</div></div>
+    </div>
+    <div class="small dim reveal" style="margin-bottom:10px;">三个核心操作</div>
+    <div class="cols c3 reveal" style="gap:22px;margin-bottom:22px;">
+      <div style="border-top:1.5px solid var(--ink);padding-top:14px;"><h3 style="margin-bottom:6px;">Retain　<span class="small dim">存储</span></h3><div class="small">存入信息，LLM 自动提取事实、实体与关系，并归入上述四类</div><div class="mono-s dim" style="margin-top:8px;">阶段：写入</div></div>
+      <div style="border-top:1.5px solid var(--ink);padding-top:14px;"><h3 style="margin-bottom:6px;">Recall　<span class="small dim">检索</span></h3><div class="small">语义 + 关键词 + 图谱 + 时间四路并行，再经 Reranker 重排序</div><div class="mono-s dim" style="margin-top:8px;">阶段：读取</div></div>
+      <div style="border-top:1.5px solid var(--ink);padding-top:14px;"><h3 style="margin-bottom:6px;">Reflect　<span class="small dim">反思</span></h3><div class="small">基于整个记忆库生成带情境感知的深度分析</div><div class="mono-s dim" style="margin-top:8px;">阶段：升华</div></div>
+    </div>
+    <div class="note reveal">
+      <b>关键差异</b>　Mem0 只区分「事实属于谁」，Hindsight 还要回答「这条信息是什么性质的知识」。分类的价值在检索侧兑现：问偏好就重查思维模型，问行程就重查交互记录。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S12 · Hindsight 技术架构
+     ============================================================ -->
+<section class="slide" data-sec="Hindsight-CN · 技术架构">
+  <div class="frame">
+    <div class="topbar reveal"><h2>一条 docker run 起来的中文记忆库</h2><span class="lab">DEPLOYMENT · OFFLINE-CAPABLE</span></div>
+    <div class="lede reveal" style="margin-bottom:16px;">模型内嵌镜像、双架构支持、完全离线可用 —— 这是它相对原版最实质的改造</div>
+    <div class="cols c2 reveal" style="gap:32px;align-items:start;">
+      <div>
+        <pre class="code" style="font-size:13.5px;"><span class="c"># 一行启动：模型已内嵌，无需联网下载模型</span>
+docker run --rm -it -p 8888:8888 -p 9999:9999 \
+  -e HINDSIGHT_API_LLM_MODEL=MiniMax-M2.7 \
+  -e HINDSIGHT_API_LLM_BASE_URL=https://api.minimaxi.com/v1 \
+  -v hindsight-data:/home/hindsight/.pg0 \
+  transnull/hindsight-cn:latest
+
+<span class="c"># API http://localhost:8888</span>
+<span class="c"># 管理面板 http://localhost:9999/dashboard</span></pre>
+        <div class="small dim reveal" style="margin:18px 0 8px;">与原版 hindsight 的实质差异</div>
+        <table class="tbl reveal">
+          <colgroup><col style="width:180px"><col style="width:290px"><col style="width:330px"></colgroup>
+          <thead><tr><th></th><th>原版 (vectorize-io)</th><th>中文版 (vulnnull)</th></tr></thead>
+          <tbody>
+            <tr><td class="name">UI 语言</td><td>英文</td><td>中文</td></tr>
+            <tr><td class="name">Embedding</td><td>bge-small-en-v1.5（384d）</td><td>bge-small-zh-v1.5（512d）</td></tr>
+            <tr><td class="name">Reranker</td><td>ms-marco-MiniLM-L-6</td><td>mmarco-mMiniLMv2（多语言）</td></tr>
+            <tr><td class="name">模型总大小</td><td class="m">约 160MB</td><td class="m">约 550MB</td></tr>
+            <tr><td class="name">镜像架构</td><td class="m">amd64</td><td class="m">arm64 + amd64</td></tr>
+            <tr><td class="name">LLM 适配</td><td>OpenAI 为主</td><td>额外支持 MiniMax/DeepSeek/智谱</td></tr>
+            <tr><td class="name">HF 源</td><td>默认源</td><td>支持 hf-mirror.com</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="small dim reveal" style="margin-bottom:10px;">四路并行检索 + Reranker：Recall 的完整链路</div>
+        <div class="cols c4 reveal" style="gap:10px;margin-bottom:14px;">
+          <div class="panel" style="padding:14px 14px;"><div class="mono-s" style="margin-bottom:6px;">①</div><h4 style="font-size:22px;margin-bottom:4px;">语义检索</h4><div class="small dim" style="font-size:13px;">向量近邻<br>bge-small-zh-v1.5</div></div>
+          <div class="panel" style="padding:14px 14px;"><div class="mono-s" style="margin-bottom:6px;">②</div><h4 style="font-size:22px;margin-bottom:4px;">关键词检索</h4><div class="small dim" style="font-size:13px;">BM25 词面匹配<br>专有名词/型号不丢</div></div>
+          <div class="panel" style="padding:14px 14px;"><div class="mono-s" style="margin-bottom:6px;">③</div><h4 style="font-size:22px;margin-bottom:4px;">图谱检索</h4><div class="small dim" style="font-size:13px;">实体关系游走<br>跨事实的隐含连接</div></div>
+          <div class="panel" style="padding:14px 14px;"><div class="mono-s" style="margin-bottom:6px;">④</div><h4 style="font-size:22px;margin-bottom:4px;">时间检索</h4><div class="small dim" style="font-size:13px;">时序窗口<br>「上周」「上次」可解</div></div>
+        </div>
+        <div class="panel soft reveal" style="margin-bottom:22px;">
+          <div class="small"><b style="font-weight:600;">Reranker 重排</b>　<span class="mono-s dim">mmarco-mMiniLMv2-L12</span><br>四路结果统一重排序后取 Top-K</div>
+        </div>
+        <div class="small dim reveal" style="margin-bottom:10px;">智能体接入：三种方式覆盖主流 Agent</div>
+        <table class="tbl reveal">
+          <colgroup><col style="width:200px"><col style="width:250px"><col style="width:400px"><col style="width:230px"></colgroup>
+          <thead><tr><th>接入方式</th><th>适用 Agent</th><th>机制</th><th>关键配置</th></tr></thead>
+          <tbody>
+            <tr><td class="name">官方插件</td><td>OpenClaw</td><td>自动 retain / recall，按 agent·channel·user 隔离 bank</td><td class="m">dynamicBankGranularity</td></tr>
+            <tr><td class="name">原生支持</td><td>Hermes Agent</td><td>hybrid / context / tools 三种记忆模式</td><td class="m">auto_recall + auto_retain</td></tr>
+            <tr><td class="name">MCP + Hooks</td><td>Claude Code</td><td>Hooks 自动存取 + MCP 工具手动操作</td><td class="m">agent_knowledge_* 工具族</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S13 · Hindsight Mock 演示
+     ============================================================ -->
+<section class="slide" data-sec="Hindsight-CN · Mock 演示">
+  <div class="frame">
+    <div class="topbar reveal"><h2>同一份对话，被分进了四个不同的抽屉</h2><span class="lab">MOCK RUN · RETAIN → CLASSIFY → RECALL</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">写入时先分类，检索时四路并行 —— 分类决定了「问什么就查哪个抽屉」</div>
+    <div class="cols c2 reveal" style="gap:34px;align-items:start;">
+      <div>
+        <pre class="code"><span class="c"># Retain：写入 bank=zhangwei，LLM 自动分类</span>
+<span class="c"># 所有记忆存放在隔离的 Bank 中 = 每个智能体独立的大脑</span>
+
+[world]       跨境电商 SaaS 通常需对接报关与
+              跨境支付等外部流程
+[experience]  2026-09 中旬赴北京出差，拜访物流行业客户
+[observation] v1.0 当前阻塞：支付对接尚未完成联调
+[mental]      偏好 Composition API，反对 class 组件写法
+
+<span class="c"># 同时构建知识图谱（实体 + 关系）</span>
+张伟 ─参与→ Orca项目 ─技术栈→ {Vue 3, TypeScript, Pinia}
+张伟 ─出差→ 北京 ─拜访→ 物流客户 ─痛点→ 报关流程
+Orca项目 ─风险→ 支付对接 ─状态→ 未联调</pre>
+      </div>
+      <div>
+        <div class="small reveal" style="margin-bottom:8px;"><b style="font-weight:600;">Q2（时间型）· 时间 + 图谱路立功</b>　Query：「我上一次出差是什么时候、见了谁？」</div>
+        <table class="tbl reveal" style="margin-bottom:22px;">
+          <colgroup><col style="width:170px"><col style="width:430px"><col style="width:160px"></colgroup>
+          <thead><tr><th>检索路</th><th>命中</th><th>得分</th></tr></thead>
+          <tbody>
+            <tr><td>① 语义</td><td>experience 节点「赴北京出差」</td><td class="m">0.79</td></tr>
+            <tr><td>② 关键词</td><td>「出差」精确命中</td><td class="m">0.88</td></tr>
+            <tr><td>③ 图谱</td><td>张伟─出差→北京─拜访→物流客户</td><td class="m">0.83</td></tr>
+            <tr><td>④ 时间</td><td>「上一次」→ 定位 2026-09-15</td><td class="m">0.91</td></tr>
+          </tbody>
+        </table>
+        <div class="small reveal" style="margin-bottom:8px;"><b style="font-weight:600;">Q4（联想型）· 图谱路救回一半</b>　Query：客户抱怨的根源 vs 架构薄弱点</div>
+        <table class="tbl reveal">
+          <colgroup><col style="width:230px"><col style="width:370px"><col style="width:160px"></colgroup>
+          <thead><tr><th>检索路</th><th>命中</th><th>得分</th></tr></thead>
+          <tbody>
+            <tr><td>① 语义 / ② 关键词</td><td>与「报关/支付」均不重合</td><td class="m">0.44 / 0.06</td></tr>
+            <tr><td>③ 图谱</td><td>物流客户─痛点→报关流程</td><td class="m">0.71 ◐</td></tr>
+            <tr><td>Reranker 重排后</td><td>召回 experience，但支付侧未联动</td><td class="m">部分命中</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:18px;">
+      <b>Hindsight-CN 的差异化特点</b>　① 唯一把中文模型内嵌进镜像的方案：bge-small-zh-v1.5 + 多语言 Reranker 打包进镜像（约 550MB），arm64/amd64 双架构，NAS 与离线环境可直接跑，无需访问 HuggingFace。② 四路检索含显式的「图谱路」：这是它比 Mem0 更能应对跨事实问题的原因 —— 实体关系可以绕过词面相似度。本次 Q4 图谱路给出 0.71，而语义仅 0.44。③ 显式 Reflect 操作 + 中文 Web 面板：记忆可视化管理是其他三个项目都不具备的运维体验。④ 风险提示：本仓库仅 13★，是个人维护的中文发行版，核心价值依赖上游 vectorize-io/hindsight（24,719★）的持续演进。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S14 · CHAPTER DIVIDER · Zep / Graphiti
+     ============================================================ -->
+<section class="slide" data-sec="03 Zep">
+  <div class="glitch r" data-glitch="8"></div>
+  <div class="qr" style="right:170px;top:170px;" data-qr="4"></div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;">
+    <div class="kick cjk reveal">03 · github.com/getzep/zep · github.com/getzep/graphiti</div>
+    <h1 class="chapter reveal" style="margin:20px 0 10px;">Zep / Graphiti</h1>
+    <div class="mono-s dim reveal">Graphiti 31,081 stars · zep 仓 4,927 stars · Python · 时序上下文图 · 2024-08 开源 · arXiv:2501.13956</div>
+    <div style="width:300px;height:1.5px;background:var(--ink);margin:34px 0;" class="reveal"></div>
+    <h3 class="reveal" style="font-size:38px;line-height:1.4;max-width:1180px;">核心论点　把记忆建成一张会随时间自我修订的知识图 —— 事实带着「有效窗口」入库，冲突时旧事实被失效而不是被删除。</h3>
+    <div class="reveal" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:40px;">
+      <span class="chip fill">Graphiti 31,081 ★ · 开源核心</span>
+      <span class="chip">双时间模型 bi-temporal</span>
+      <span class="chip">Episode → Entity → Fact 三层</span>
+      <span class="chip">语义 + BM25 + 图遍历 三路混合</span>
+      <span class="chip">Neo4j / FalkorDB / Neptune 可插拔</span>
+      <span class="chip">Zep Cloud 托管 · sub-200ms</span>
+    </div>
+    <div class="mono-s dim reveal" style="margin-top:44px;">接下来三页：核心思想 → 架构与组件实现 → Mock 数据演示与差异化</div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S15 · Zep 核心思想
+     ============================================================ -->
+<section class="slide" data-sec="Zep · 核心思想">
+  <div class="frame">
+    <div class="topbar reveal"><h2>时序上下文图的五条设计原则</h2><span class="lab">FIVE PRINCIPLES · TEMPORAL CONTEXT GRAPH</span></div>
+    <div class="lede reveal" style="margin-bottom:20px;">核心判断：记忆的难点不在「记住」，而在「事实变了以后，还能说清什么时候是什么样」</div>
+    <div class="idx reveal">
+      <div class="idx-row"><span class="num">TMP</span><div><h4>Temporal Validity　每条事实都带有效窗口：何时成为真、何时被取代</h4><p>「Kendra 喜欢 Adidas（截至 2026 年 3 月）」—— 事实必须能被时间限定，否则答不出「现在还算不算」。</p></div></div>
+      <div class="idx-row"><span class="num">INV</span><div><h4>Automatic Invalidation　信息变化时旧事实自动失效，而非删除或覆盖</h4><p>与 Mem0 的 ADD-only 正好相反：Zep 在写入时就裁决冲突，把旧边的失效时间填上，历史完整保留可回溯。</p></div></div>
+      <div class="idx-row"><span class="num">EPI</span><div><h4>Episodes as Provenance　原始数据以 Episode 形式留存，任何派生事实都能溯源回去</h4><p>Episode 是 ground truth stream：每个实体、每条关系都能追到是哪段对话或哪条 JSON 产生的。</p></div></div>
+      <div class="idx-row"><span class="num">ONT</span><div><h4>Prescribed &amp; Learned Ontology　可用 Pydantic 预定义实体与边类型，也可让结构自然涌现</h4><p>既给企业一个可控的本体，又不必在建图前把 schema 定死 —— 先简后繁，模式出现后再收紧。</p></div></div>
+      <div class="idx-row"><span class="num">HYB</span><div><h4>Hybrid Retrieval　语义 + BM25 + 图遍历三路融合，再用图距离 / cross-encoder 重排</h4><p>召回不依赖 LLM 摘要，因此能做到亚秒级；Zep Cloud 托管版在规模化下给出 sub-200ms 口径。</p></div></div>
+    </div>
+    <div class="note reveal" style="margin-top:20px;">
+      <b>与 GraphRAG 的分野（官方对比口径）</b>　GraphRAG 是「静态文档摘要 + 批处理」，矛盾交给 LLM 摘要裁决，查询延迟数秒到数十秒；Graphiti 是「持续增量更新 + 显式双时间跟踪 + 自动事实失效」，延迟亚秒级。一句话：GraphRAG 面向不变的文本，Graphiti 面向会变的事实。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S16 · Zep 技术架构
+     ============================================================ -->
+<section class="slide" data-sec="Zep · 技术架构">
+  <div class="frame">
+    <div class="topbar reveal"><h2>三层数据模型 + 可插拔图后端</h2><span class="lab">ARCHITECTURE · EPISODE / ENTITY / FACT</span></div>
+    <div class="lede reveal" style="margin-bottom:14px;">Episode 存原始，Entity 存实体与演进摘要，Fact 存带有效窗口的关系边 —— 三者构成一张可回溯的时序图</div>
+    <div class="cols c3 reveal" style="gap:22px;margin-bottom:16px;">
+      <div class="panel"><h4>Episode 层</h4><div class="mono-s dim" style="margin-bottom:8px;">原始输入 · provenance</div><div class="small">文本或结构化 JSON<br>是 ground truth stream<br>→ 每条派生事实都能溯源到它</div></div>
+      <div class="panel"><h4>Entity 层</h4><div class="mono-s dim" style="margin-bottom:8px;">节点 · 摘要随时间演进</div><div class="small">人 / 产品 / 政策 / 概念<br>摘要随新 Episode 更新<br>→ 同名实体自动去重合并</div></div>
+      <div class="panel"><h4>Fact（Edge）层</h4><div class="mono-s dim" style="margin-bottom:8px;">三元组 · 带有效窗口</div><div class="small">（实体 → 关系 → 实体）<br>valid_at / invalid_at 双时间<br>→ 冲突自动失效，历史不丢</div></div>
+    </div>
+    <div class="small dim reveal" style="margin-bottom:6px;">核心组件与可插拔后端</div>
+    <table class="tbl compact reveal">
+      <colgroup><col style="width:260px"><col style="width:420px"><col style="width:1060px"></colgroup>
+      <thead><tr><th>目录 / 组件</th><th>职责</th><th>关键点</th></tr></thead>
+      <tbody>
+        <tr><td class="name">graphiti-core</td><td>开源核心引擎</td><td>pip install graphiti-core（Python 3.10+）；add_episode / search 两类主调用</td></tr>
+        <tr><td class="name">graph_driver</td><td>图后端驱动</td><td>Neo4j 5.26 / FalkorDB 1.1.2 / Amazon Neptune；Kuzu 已废弃</td></tr>
+        <tr><td class="name">mcp_server/</td><td>MCP 服务</td><td>episode 管理、实体与关系处理、语义与混合搜索、group 管理、图维护</td></tr>
+        <tr><td class="name">server/</td><td>REST 服务</td><td>FastAPI 实现，可容器化对外暴露 HTTP 接口</td></tr>
+        <tr><td class="name">zep-cloud SDK</td><td>托管服务客户端</td><td>pip install zep-cloud · npm @getzep/zep-cloud · go get zep-go/v3</td></tr>
+        <tr><td class="name">integrations/ · examples/</td><td>生态适配</td><td>LangGraph / CrewAI / AutoGen / Pydantic AI / Google ADK / Mastra / Vercel AI SDK / ADK-Go</td></tr>
+        <tr><td class="name">SEMAPHORE_LIMIT</td><td>并发闸门</td><td>默认 10；遇 LLM 429 调低，provider 吞吐够时调高以提速摄入</td></tr>
+      </tbody>
+    </table>
+    <div class="note reveal" style="margin-top:16px;">
+      <b>部署现实</b>　Graphiti 是「自带图数据库」的开源核心（self-hosted only），Zep Cloud 才是托管版（预配置、生产就绪、规模化 sub-200ms）。本仓库 getzep/zep 本身只是示例与集成集合，旧的 Community Edition 已废弃并移入 legacy/ —— 要看引擎实现，请直接看 getzep/graphiti。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S17 · Zep Mock 演示
+     ============================================================ -->
+<section class="slide" data-sec="Zep · Mock 演示">
+  <div class="frame">
+    <div class="topbar reveal"><h2>张伟的 4 条对话，Zep 建出了什么图</h2><span class="lab">MOCK RUN · EPISODE → GRAPH → RETRIEVE</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">左侧是 add_episode() 的建图结果，右侧是同一问题在三路检索下的召回打分</div>
+    <div class="cols c2 reveal" style="gap:34px;align-items:start;">
+      <div>
+        <pre class="code"><span class="c"># 写入：Episode 是 ground truth，LLM 抽实体 + 事实边</span>
+await graphiti.add_episode(
+    name=<span class="k">"orca-0915"</span>,
+    episode_body=<span class="k">"上周去北京出差，见了个做物流系统的客户…"</span>,
+    source=EpisodeType.text,
+    reference_time=datetime(<span class="k">2026, 9, 15</span>),
+    group_id=<span class="k">"zhangwei"</span>)
+
+<span class="c"># → 图里长出的节点与边（均带有效窗口）</span>
+[Entity] 张伟 · Orca · 北京 · 物流客户 · 报关流程 · 支付对接
+[Fact]  张伟     —负责→  Orca      valid 2026-09-08 → ∞
+[Fact]  张伟     —出差→  北京      valid 2026-09-15 → ∞
+[Fact]  物流客户 —痛点→  报关流程   valid 2026-09-15 → ∞
+[Fact]  Orca     —风险→  支付对接   valid 2026-09-21 → ∞
+
+<span class="c"># 若下一条消息说「支付已联调完成」：</span>
+<span class="c"># 旧边不会被删，而是填上 invalid_at = 2026-09-25，</span>
+<span class="c"># 查「9 月 20 日的事实」仍然能看到「未联调」</span></pre>
+      </div>
+      <div>
+        <div class="small dim" style="margin-bottom:10px;">Q2（时间型）· 双时间模型的主场</div>
+        <table class="tbl compact reveal" style="margin-bottom:20px;">
+          <colgroup><col style="width:170px"><col style="width:400px"><col style="width:130px"></colgroup>
+          <thead><tr><th>检索路</th><th>命中</th><th>得分</th></tr></thead>
+          <tbody>
+            <tr><td class="name">① 语义</td><td>「出差」事件与问句近义</td><td class="m">0.82</td></tr>
+            <tr><td class="name">② BM25</td><td>「出差」「北京」精确命中</td><td class="m">0.90</td></tr>
+            <tr><td class="name">③ 图遍历</td><td>张伟─出差→北京─拜访→物流客户</td><td class="m">0.88</td></tr>
+            <tr><td class="name">④ 时间过滤</td><td>valid_at=09-15 且 invalid_at 为空</td><td class="m">1.00</td></tr>
+          </tbody>
+        </table>
+        <div class="small dim" style="margin-bottom:10px;">Q4（联想型）· 图遍历把两条链都拉到</div>
+        <table class="tbl compact reveal">
+          <colgroup><col style="width:170px"><col style="width:400px"><col style="width:130px"></colgroup>
+          <thead><tr><th>检索路</th><th>命中</th><th>得分</th></tr></thead>
+          <tbody>
+            <tr><td class="name">① / ② 语义·BM25</td><td>与「报关」「支付」均无词面重合</td><td class="m">0.40 / 0.05</td></tr>
+            <tr><td class="name">③ 图遍历</td><td>报关流程←痛点─物流客户；支付对接←风险─Orca</td><td class="m">0.74 ◐</td></tr>
+            <tr><td class="name">重排（图距离）</td><td>两条边都被召回，但图上互不连通</td><td class="m">0.66</td></tr>
+            <tr><td class="name">最终答案</td><td>「都卡在外部环节：报关慢 + 支付未联调」</td><td class="m">✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:18px;">
+      <b>Zep / Graphiti 的差异化特点</b>　① 唯一把「时间」做成图结构的一等公民：双时间模型 + 自动失效，在写入期就裁决冲突，历史可回溯到任意时刻；② 混合检索含显式图遍历与图距离重排，官方给出亚秒级延迟口径（论文口径：LongMemEval 上准确率最高 +18.5%，延迟降低 90%）；③ 开源核心与托管服务双轨，Python / TS / Go 三端 SDK 加十余个 Agent 框架集成。<b>局限</b>　自托管必须自带图数据库，运维成本高于 Mem0；摄入强依赖 LLM 稳定的结构化 JSON 输出，本地小模型易抽取失败；且它没有独立反思层 —— 不会主动说出没被明说的话。
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-sec="04 Honcho-CN">
+  <div class="glitch r" data-glitch="4"></div>
+  <div class="qr" style="right:170px;top:170px;" data-qr="2"></div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;">
+    <div class="kick cjk reveal">04 · github.com/WZXsea/honcho-cn</div>
+    <h1 class="chapter reveal" style="margin:20px 0 10px;">Honcho-CN</h1>
+    <div class="mono-s dim reveal">6 stars · Python · Plastic Labs Honcho 国内适配版 · 自托管 · 默认端口 8001</div>
+    <div style="width:300px;height:1.5px;background:var(--ink);margin:34px 0;" class="reveal"></div>
+    <h3 class="reveal" style="font-size:38px;line-height:1.4;max-width:1180px;">核心论点　记忆不是检索出来的，而是推理出来的 —— 写入即入队，后台用形式逻辑把显式前提变成结论。</h3>
+    <div class="reveal" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:40px;">
+      <span class="chip fill">Workspace / Peer / Session / Message 四原语</span>
+      <span class="chip">Deriver + Dreamer 双推理组件</span>
+      <span class="chip">显式→演绎→归纳→溯因 四层推理</span>
+      <span class="chip">API/Deriver/Summary/Dialectic/Dream 可分别换模型</span>
+      <span class="chip">DeepSeek / MiniMax / Mimo 原生适配</span>
+    </div>
+    <div class="mono-s dim reveal" style="margin-top:44px;">接下来三页：核心思想 → 架构与组件实现 → Mock 数据演示与差异化</div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S15 · Honcho 核心思想
+     ============================================================ -->
+<section class="slide" data-sec="Honcho-CN · 核心思想">
+  <div class="frame">
+    <div class="topbar reveal"><h2>记忆即推理（Memory as Reasoning）</h2><span class="lab">REASONING OVER RETRIEVAL</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">核心判断：RAG 只能召回「被明说过的」，而真正有价值的洞察必须「想」出来</div>
+    <div class="small dim reveal" style="margin-bottom:10px;">四个存储原语 —— 一套可组合的实体模型</div>
+    <div class="cols c4 reveal" style="gap:16px;margin-bottom:24px;">
+      <div class="panel"><div class="kick cjk" style="margin-bottom:6px;">容器</div><h4 style="font-size:26px;margin-bottom:4px;">Workspace</h4><div class="small">顶层容器　隔离不同应用/环境</div><div class="mono-s dim" style="margin-top:6px;">例：orca-team</div></div>
+      <div class="panel"><div class="kick cjk" style="margin-bottom:6px;">主体</div><h4 style="font-size:26px;margin-bottom:4px;">Peer</h4><div class="small">任何会变化的持久实体　用户、Agent、物件、想法</div><div class="mono-s dim" style="margin-top:6px;">例：zhangwei</div></div>
+      <div class="panel"><div class="kick cjk" style="margin-bottom:6px;">线程</div><h4 style="font-size:26px;margin-bottom:4px;">Session</h4><div class="small">带时间边界的交互线程　一次连续对话</div><div class="mono-s dim" style="margin-top:6px;">例：s_2026_09</div></div>
+      <div class="panel"><div class="kick cjk" style="margin-bottom:6px;">原子</div><h4 style="font-size:26px;margin-bottom:4px;">Message</h4><div class="small">触发推理的数据单元　对话、事件、文档</div><div class="mono-s dim" style="margin-top:6px;">例：4 条原始消息</div></div>
+    </div>
+    <div class="small dim reveal" style="margin-bottom:10px;">写入不是「存原文」，而是交给推理引擎产出结论 —— 四层递进</div>
+    <div class="cols c4 reveal" style="gap:16px;margin-bottom:22px;">
+      <div style="border-top:1.5px solid var(--ink);padding-top:12px;"><h4 style="font-family:var(--fd);font-weight:400;font-size:26px;margin-bottom:4px;">Explicit　<span class="small dim">显式</span></h4><div class="small">原文中明确说过的内容，作为后续推理的前提（premise）</div><div class="mono-s dim" style="margin-top:6px;">产出组件：Deriver</div></div>
+      <div style="border-top:1.5px solid var(--ink);padding-top:12px;"><h4 style="font-family:var(--fd);font-weight:400;font-size:26px;margin-bottom:4px;">Deductive　<span class="small dim">演绎</span></h4><div class="small">由前提严格推出的必然结论：前提 → 结论</div><div class="mono-s dim" style="margin-top:6px;">产出组件：Deriver</div></div>
+      <div style="border-top:1.5px solid var(--ink);padding-top:12px;"><h4 style="font-family:var(--fd);font-weight:400;font-size:26px;margin-bottom:4px;">Inductive　<span class="small dim">归纳</span></h4><div class="small">跨多条消息识别模式与趋势</div><div class="mono-s dim" style="margin-top:6px;">产出组件：Dreamer</div></div>
+      <div style="border-top:1.5px solid var(--ink);padding-top:12px;"><h4 style="font-family:var(--fd);font-weight:400;font-size:26px;margin-bottom:4px;">Abductive　<span class="small dim">溯因</span></h4><div class="small">为观察到的行为推断最简解释</div><div class="mono-s dim" style="margin-top:6px;">产出组件：Dreamer</div></div>
+    </div>
+    <div class="cols c2 reveal" style="gap:30px;">
+      <div class="small"><b style="font-weight:600;">为什么必须是推理</b>　传统 RAG 检索「被明说的话」，遇到「新旧信息矛盾」「不确定性预测」「隐含关联」就失效。Honcho 主张把这些交给形式逻辑 —— LLM 擅长在成千上万条结论上保持一致推理而不会疲劳。</div>
+      <div class="small" style="border-left:1px solid rgba(31,43,224,.28);padding-left:22px;"><b style="font-weight:600;">用哪个模型</b>　它用的是为逻辑严谨性专门训练的小模型（如 Neuromancer XR），而非通用前沿大模型：结构化 JSON 输出、成本更低、推理更稳定。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S16 · Honcho 技术架构
+     ============================================================ -->
+<section class="slide" data-sec="Honcho-CN · 技术架构">
+  <div class="frame">
+    <div class="topbar reveal"><h2>请求路径与后台推理彻底分离</h2><span class="lab">ASYNC PIPELINE · 4 CONTAINERS</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">写入立即返回，推理异步入队 —— 这是它能兼顾低延迟与深度推理的关键</div>
+    <div class="small dim reveal" style="margin-bottom:10px;">Docker Compose 拉起四个容器</div>
+    <div class="cols c4 reveal" style="gap:16px;margin-bottom:24px;">
+      <div class="panel"><h4 style="font-size:24px;">api</h4><div class="kick cjk" style="margin:4px 0 6px;">主 API 服务</div><div class="small" style="font-size:14px;">REST 接口，默认端口 8001<br>workspace/peer/session/message 管理</div></div>
+      <div class="panel"><h4 style="font-size:24px;">deriver</h4><div class="kick cjk" style="margin:4px 0 6px;">推理/抽取服务</div><div class="small" style="font-size:14px;">消费队列，产出显式 + 演绎结论<br>按 session 队列保证时序一致</div></div>
+      <div class="panel"><h4 style="font-size:24px;">database</h4><div class="kick cjk" style="margin:4px 0 6px;">PostgreSQL + 向量</div><div class="small" style="font-size:14px;">结构化数据 + 向量集合<br>结论索引后供检索</div></div>
+      <div class="panel"><h4 style="font-size:24px;">redis</h4><div class="kick cjk" style="margin:4px 0 6px;">缓存 / 队列</div><div class="small" style="font-size:14px;">异步任务队列<br>支撑 deriver 的削峰</div></div>
+    </div>
+    <div class="small dim reveal" style="margin-bottom:10px;">认知栈：五个可独立换模型的推理组件（本 Fork 的最大实用价值）</div>
+    <table class="tbl reveal" style="margin-bottom:20px;">
+      <colgroup><col style="width:240px"><col style="width:500px"><col style="width:640px"><col style="width:360px"></colgroup>
+      <thead><tr><th>组件</th><th>作用</th><th>环境变量</th><th>示例取值</th></tr></thead>
+      <tbody>
+        <tr><td class="name">API</td><td>实体与会话管理</td><td class="m">LLM_OPENAI_API_KEY</td><td class="m">—</td></tr>
+        <tr><td class="name">Deriver</td><td>显式 + 演绎结论抽取</td><td class="m">DERIVER_MODEL_CONFIG__MODEL</td><td class="m">mimo-v2.5-pro</td></tr>
+        <tr><td class="name">Summary</td><td>会话摘要生成</td><td class="m">SUMMARY_MODEL_CONFIG__MODEL</td><td class="m">deepseek-v4-flash</td></tr>
+        <tr><td class="name">Dialectic</td><td>分档对话推理（low/mid/high）</td><td class="m">DIALECTIC_LEVELS__low__MODEL_CONFIG__MODEL</td><td class="m">deepseek-v4-flash</td></tr>
+        <tr><td class="name">Dream</td><td>定期 consolidate + 归纳/演绎</td><td class="m">DREAM_DEDUCTION / INDUCTION_..._MODEL</td><td class="m">deepseek-v4-flash</td></tr>
+        <tr><td class="name">Embedding</td><td>向量嵌入（维度可配）</td><td class="m">EMBEDDING_MODEL_CONFIG__MODEL</td><td class="m">BAAI/bge-m3 · 1024d</td></tr>
+      </tbody>
+    </table>
+    <div class="note reveal">
+      <b>本 Fork 的三处硬改造</b>　① 去掉 embedding 维度硬编码（原版写死 1536），改为按配置初始化；② 内置 deepseek / mimo / minimax 厂商适配 —— 自动 json_object 输出、自动关闭 thinking、自动调低 reasoning 强度；③ 全中文文档与部署目录规范（/opt/honcho）。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S17 · Honcho Mock 演示
+     ============================================================ -->
+<section class="slide" data-sec="Honcho-CN · Mock 演示">
+  <div class="frame">
+    <div class="topbar reveal"><h2>写入之后，后台「想」出了什么</h2><span class="lab">MOCK RUN · QUEUE → DERIVER → DREAM</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">注意：右侧这些内容原文里一个字都没有，全部是推理产物</div>
+    <div class="cols c2 reveal" style="gap:34px;align-items:start;">
+      <div>
+        <pre class="code" style="font-size:13.5px;"><span class="c"># 1) 写入消息 → 立即返回 → 入队等待 deriver</span>
+POST /workspaces/orca-team/peers/zhangwei/sessions/s_09/messages
+
+<span class="c"># 2) Deriver 产出：显式前提 + 演绎结论</span>
+explicit   "用户称：前端技术栈 Vue 3 + TS + Pinia，弃用 Vuex"
+deductive  premises: [ 做跨境电商 SaaS 后台, 电商需收付款 ]
+           ⇒ conclusion: 该项目必然依赖支付通道
+
+<span class="c"># 3) Summary / Peer Card</span>
+summary    "本周：锁定前端技术栈；赴北京拜访物流客户"
+peer_card  { 角色: 前端负责人, 偏好: Composition API, 关注: 交付节奏 }
+
+<span class="c"># 4) Dream：定期回访已有结论（跨 session）</span>
+induction  跨 3 次会话 ⇒ 该用户反复关注「外部依赖方」风险
+deduction  [10月中旬上线 + 支付未联调] ⇒ 不启动联调则延期风险显著上升</pre>
+      </div>
+      <div>
+        <div class="small reveal" style="margin-bottom:8px;"><b style="font-weight:600;">Dialectic API：按推理深度分档</b>　同一个问题可选「推理到什么程度」—— Honcho 独有的成本 / 质量旋钮。</div>
+        <table class="tbl reveal" style="margin-bottom:20px;">
+          <colgroup><col style="width:130px"><col style="width:330px"><col style="width:400px"></colgroup>
+          <thead><tr><th>档位</th><th>问法</th><th>返回</th></tr></thead>
+          <tbody>
+            <tr><td class="m">low</td><td>「他们前端用什么状态管理？」</td><td>直接答 Pinia（1 步）</td></tr>
+            <tr><td class="m">high</td><td>「v1.0 有多大概率延期？」</td><td>结合 peer_card + 演绎结论：中等偏高，因支付为外部依赖</td></tr>
+          </tbody>
+        </table>
+        <div class="panel soft reveal">
+          <div class="kick cjk" style="margin-bottom:8px;">Q3（推理型）· 主场</div>
+          <div class="small" style="margin-bottom:8px;">Query：v1.0 最可能卡在哪个环节？</div>
+          <div class="small dim" style="margin-bottom:8px;">演绎结论「跨境电商 SaaS ⇒ 需支付通道」已入库，叠加「支付未联调」，直接作答：</div>
+          <div class="small" style="font-weight:600;">→ 支付对接；本周内不启动联调则延期风险显著上升</div>
+        </div>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:18px;">
+      <b>Honcho-CN 的差异化特点</b>　① 唯一把「推理」作为产品核心：其他三家产出记忆条目，Honcho 产出的是关于这个 Peer 的结论 —— 可组合、可程序化拼装上下文。② 按组件换模型，工程上极其实用：抽取 / 摘要 / Dialectic / Dream 各配各的模型，成本可逐项调优；DeepSeek、MiniMax、Mimo 开箱即适配。③ 异步 + 队列保序：写入立即返回不阻塞，同一 Peer 的推理严格按序处理，避免结论互相打架。④ 风险提示：本仓库仅 6★ 且 2026-05 后未再更新；Dream 必须异步任务真正跑通才有价值 —— 部署后务必按「建 workspace → peer → session → 发消息 → 看 queue/status → 看 conclusions/list」链路验证。
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-sec="05 T-Mem">
+  <div class="glitch r" data-glitch="5"></div>
+  <div class="qr" style="right:170px;top:170px;" data-qr="9"></div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;">
+    <div class="kick cjk reveal">05 · github.com/Sherlockwz/T-Mem</div>
+    <h1 class="chapter reveal" style="margin:20px 0 10px;">T-Mem</h1>
+    <div class="mono-s dim reveal">131 stars · Python · T-Mem: Memory That Anticipates, Not Archives · arXiv:2606.15405 · MIT</div>
+    <div style="width:300px;height:1.5px;background:var(--ink);margin:34px 0;" class="reveal"></div>
+    <h3 class="reveal" style="font-size:38px;line-height:1.4;max-width:1180px;">核心论点　召回不该被「相似度」限制 —— 在写入时就为每条记忆预埋触发器，让没有词面重合的问题也能被召回。</h3>
+    <div class="reveal" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:40px;">
+      <span class="chip fill">EMNLP 2026 Main Conference</span>
+      <span class="chip">描述型 + 联想型 双通道召回</span>
+      <span class="chip">四类 Trigger：Ent / Brg / Scn / Hor</span>
+      <span class="chip">Scene + Item + Topic + Persona 类型分隔图</span>
+      <span class="chip">跨基准仅跌 5.45pp</span>
+    </div>
+    <div class="mono-s dim reveal" style="margin-top:44px;">接下来三页：核心思想 → 架构与组件实现 → Mock 数据演示与差异化</div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S19 · T-Mem 核心思想
+     ============================================================ -->
+<section class="slide" data-sec="T-Mem · 核心思想">
+  <div class="frame">
+    <div class="topbar reveal"><h2>记忆应该「预判」，而不只是「归档」</h2><span class="lab">DESCRIPTIVE vs ASSOCIATIVE RECALL</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">核心判断：现有记忆系统的召回被相似度「可达性」锁死，另一半问题根本检索不到</div>
+    <div class="small dim reveal" style="margin-bottom:10px;">被忽略的另一半：描述型召回 vs 联想型召回</div>
+    <div class="cols c2 reveal" style="gap:24px;margin-bottom:24px;">
+      <div class="panel"><h4>描述型 recall（descriptive）</h4><div class="small" style="margin-bottom:8px;">Query 与记忆共享表层特征：相同的措辞、相同的命名实体。</div><div class="small dim" style="margin-bottom:8px;">例：「我们前端状态管理用哪个库？」 ↔ 「状态管理用 Pinia」</div><div class="small"><b style="font-weight:600;">现状</b>　向量检索 + BM25 都已覆盖，四家都能做。</div></div>
+      <div class="panel soft"><h4>联想型 recall（associative）</h4><div class="small" style="margin-bottom:8px;">Query 与记忆没有任何表层重合，只靠一条潜在的语义弧相连。</div><div class="small dim" style="margin-bottom:8px;">例：「客户抱怨的根源和我们架构薄弱点是一类问题吗？」</div><div class="small"><b style="font-weight:600;">现状</b>　主流长期记忆系统集体失效 —— 这正是 T-Mem 的靶心。</div></div>
+    </div>
+    <div class="small dim reveal" style="margin-bottom:10px;">解法：2×2 设计空间，每个象限配一类 Trigger（写入时的预演式复述）</div>
+    <div class="cols c2 reveal" style="gap:24px;align-items:start;">
+      <div>
+        <div class="quad" style="height:250px;">
+          <div class="q" style="display:flex;flex-direction:column;justify-content:flex-end;"><div class="mono-s dim">Item 原子事实</div></div>
+          <div class="q" style="display:flex;flex-direction:column;justify-content:flex-end;"><div class="mono-s dim">Scene 完整场景</div></div>
+          <div class="q" style="display:flex;flex-direction:column;justify-content:center;"><div class="mono-s dim">描述型 →</div></div>
+          <div class="q" style="display:flex;flex-direction:column;justify-content:center;"><div class="mono-s dim">联想型 →</div></div>
+        </div>
+      </div>
+      <div class="cols c2" style="gap:14px;">
+        <div class="panel" style="padding:16px 18px;"><div class="mono-s" style="margin-bottom:6px;">T_Ent　实体触发器</div><div class="small">「报关 / 北京 / 物流客户」</div><div class="mono-s dim" style="margin-top:6px;">Item × 描述型</div></div>
+        <div class="panel" style="padding:16px 18px;"><div class="mono-s" style="margin-bottom:6px;">T_Brg　桥接触发器</div><div class="small">「第三方环节为何总拖慢交付？」</div><div class="mono-s dim" style="margin-top:6px;">Item × 联想型</div></div>
+        <div class="panel" style="padding:16px 18px;"><div class="mono-s" style="margin-bottom:6px;">T_Scn　场景触发器</div><div class="small">「那次出差聊了什么？」</div><div class="mono-s dim" style="margin-top:6px;">Scene × 描述型</div></div>
+        <div class="panel" style="padding:16px 18px;"><div class="mono-s" style="margin-bottom:6px;">T_Hor　视野触发器</div><div class="small">「上线前还剩哪些风险？」</div><div class="mono-s dim" style="margin-top:6px;">Scene × 联想型</div></div>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:20px;">
+      <b>Trigger 是什么</b>　T-Mem 在写入阶段就对每条记忆做一次「未来的我会怎么问起它」的预演，把可能的提问方式写成 Trigger 存下来。论文将其类比为人类认知中的情景未来思考（episodic future thinking）—— 记忆不是为了存档，而是为了被将来某个意想不到的问题唤醒。三条设计承诺：① 证据层按类型分隔（scene 与 item 各按自身粒度检索）；② topic 标签不进 QA 通道，只做范围过滤；③ Trigger 不进证据路径 —— 把「怎么被找到」与「找到了什么」彻底解耦。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S20 · T-Mem 技术架构
+     ============================================================ -->
+<section class="slide" data-sec="T-Mem · 技术架构">
+  <div class="frame">
+    <div class="topbar reveal"><h2>一张类型分隔的记忆图 + 九阶段流水线</h2><span class="lab">TYPE-SEPARATED GRAPH · 9 STAGES</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">五类对象各司其职，且 Trigger 刻意不进入证据路径 —— 这是它能同时做描述型与联想型召回的结构原因</div>
+    <table class="tbl reveal" style="margin-bottom:22px;">
+      <colgroup><col style="width:280px"><col style="width:250px"><col style="width:620px"><col style="width:600px"></colgroup>
+      <thead><tr><th>对象</th><th>符号</th><th>角色</th><th>是否作为 QA 证据</th></tr></thead>
+      <tbody>
+        <tr><td class="name">场景 Scene</td><td class="m">V_S</td><td>内聚的完整对话片段</td><td>是（作为证据传给 QA）</td></tr>
+        <tr><td class="name">原子项 Item</td><td class="m">V_I</td><td>锚定在宿主场景上的原子事实</td><td>是（作为证据传给 QA）</td></tr>
+        <tr><td class="name">主题标签 Topic</td><td class="m">V_T</td><td>多标签，圈定抽取范围</td><td>否（仅做前置过滤）</td></tr>
+        <tr><td class="name">触发器族 Trigger</td><td class="m">T_Ent / T_Brg / T_Scn / T_Hor</td><td>对应设计空间四个象限</td><td>否（只在检索侧生效）</td></tr>
+        <tr><td class="name">人格 Persona</td><td class="m">X</td><td>说话人的稳定特质</td><td>否（作为环境上下文注入）</td></tr>
+      </tbody>
+    </table>
+    <div class="small dim reveal" style="margin-bottom:10px;">两阶段工作流：Build 建记忆 → Evaluate 评测</div>
+    <div class="cols c5 reveal" style="gap:10px;margin-bottom:20px;">
+      <div class="panel" style="padding:12px 14px;"><div class="mono-s" style="margin-bottom:4px;">0</div><h4 style="font-size:20px;margin-bottom:4px;">Stitch</h4><div class="small dim" style="font-size:13px;">raw dataset → 统一形状</div></div>
+      <div class="panel" style="padding:12px 14px;"><div class="mono-s" style="margin-bottom:4px;">1</div><h4 style="font-size:20px;margin-bottom:4px;">Scene Extraction</h4><div class="small dim" style="font-size:13px;">对话切分为场景</div></div>
+      <div class="panel" style="padding:12px 14px;"><div class="mono-s" style="margin-bottom:4px;">2</div><h4 style="font-size:20px;margin-bottom:4px;">Memory Graph</h4><div class="small dim" style="font-size:13px;">抽取记忆图 + 原子项</div></div>
+      <div class="panel" style="padding:12px 14px;"><div class="mono-s" style="margin-bottom:4px;">3</div><h4 style="font-size:20px;margin-bottom:4px;">Index Building</h4><div class="small dim" style="font-size:13px;">BM25 + 向量索引</div></div>
+      <div class="panel soft" style="padding:12px 14px;"><div class="mono-s" style="margin-bottom:4px;">4 / 4b</div><h4 style="font-size:20px;margin-bottom:4px;">Trigger</h4><div class="small dim" style="font-size:13px;">场景 / 视野 / 实体 / 桥接</div></div>
+    </div>
+    <div class="cols c4 reveal" style="gap:10px;margin-bottom:20px;">
+      <div class="panel" style="padding:12px 14px;"><div class="mono-s" style="margin-bottom:4px;">5</div><h4 style="font-size:20px;margin-bottom:4px;">Per-QA Top-K</h4><div class="small dim" style="font-size:13px;">RRF 融合取候选</div></div>
+      <div class="panel" style="padding:12px 14px;"><div class="mono-s" style="margin-bottom:4px;">6</div><h4 style="font-size:20px;margin-bottom:4px;">Hierarchical Retrieval</h4><div class="small dim" style="font-size:13px;">topic → scene → item</div></div>
+      <div class="panel" style="padding:12px 14px;"><div class="mono-s" style="margin-bottom:4px;">7</div><h4 style="font-size:20px;margin-bottom:4px;">Persona Extraction</h4><div class="small dim" style="font-size:13px;">说话人特质（可选）</div></div>
+      <div class="panel" style="padding:12px 14px;"><div class="mono-s" style="margin-bottom:4px;">8</div><h4 style="font-size:20px;margin-bottom:4px;">QA Generation</h4><div class="small dim" style="font-size:13px;">生成答案并 LLM 打分</div></div>
+    </div>
+    <div class="note reveal">
+      <b>关键配置（全部走 T_MEM_* 环境变量）</b>　KEEP_SCENE=5（进 QA 的场景数）· KEEP_ITEM=15（原子项数）· USE_RERANKER=true · MAX_CONCURRENCY=14（全局并发上限）<br>
+      <b>工程提示</b>　所有外部服务统一走 OpenAI 兼容端点（chat / embeddings / rerank），OpenAI、vLLM、Ollama、SiliconFlow 可直接互换；中间产物按对话落盘，支持 --resume 断点续跑。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S21 · T-Mem Mock 演示
+     ============================================================ -->
+<section class="slide" data-sec="T-Mem · Mock 演示">
+  <div class="frame">
+    <div class="topbar reveal"><h2>写入时就把「未来的提问」埋好了</h2><span class="lab">MOCK RUN · TRIGGER PRIMING</span></div>
+    <div class="lede reveal" style="margin-bottom:18px;">看 T_Brg 如何在没有任何词面重合的情况下，把两条相隔两周的记忆拉到一起</div>
+    <div class="cols c2 reveal" style="gap:34px;align-items:start;">
+      <div>
+        <pre class="code" style="font-size:13.5px;"><span class="c"># Stage 1-3：切场景 → 抽原子项 → 建索引</span>
+S_03 [张伟: 上周去北京出差…物流客户吐槽报关流程太慢]
+     topic = [客户访谈, 供应链, 出差]
+I_07 "物流客户的最大痛点是报关流程慢"        @S_03
+S_05 [张伟: v1.0 定在 10 月中旬…风险是支付对接]
+I_11 "支付对接尚未联调，是 v1.0 最大风险"    @S_05
+
+<span class="c"># Stage 4 / 4b：为每条记忆预生成四类 Trigger ← 核心</span>
+T_Ent 描述型·Item   "报关" "北京" "物流客户"
+T_Brg 联想型·Item   "第三方环节为什么总拖慢交付？" / "外部流程依赖"
+T_Scn 描述型·Scene  "那次去北京出差聊了什么？"
+T_Hor 联想型·Scene  "上线前还剩哪些风险？"
+
+<span class="c"># Stage 5-6：Trigger 增强 + 层级检索 topic → scene → item</span></pre>
+      </div>
+      <div>
+        <div class="small reveal" style="margin-bottom:8px;"><b style="font-weight:600;">Q4（联想型）· 唯一完全命中</b>　Query：「客户抱怨的根源，和我们架构薄弱点是一类问题吗？」</div>
+        <table class="tbl reveal" style="margin-bottom:20px;">
+          <colgroup><col style="width:250px"><col style="width:600px"></colgroup>
+          <thead><tr><th>步骤</th><th>发生了什么</th></tr></thead>
+          <tbody>
+            <tr><td>① 语义 / BM25</td><td>与 I_07、I_11 均无词面重合</td></tr>
+            <tr><td>② T_Brg 命中</td><td>「外部流程依赖」触发器被激活</td></tr>
+            <tr><td>③ 同时拉起</td><td>I_07（报关）+ I_11（支付）</td></tr>
+            <tr><td>④⑤ 层级检索 → 答案</td><td>同属「强依赖第三方流程且缺兜底」</td></tr>
+          </tbody>
+        </table>
+        <div class="small reveal" style="margin-bottom:8px;"><b style="font-weight:600;">论文关键结果：跨基准落差才是重点</b></div>
+        <table class="tbl reveal">
+          <colgroup><col style="width:340px"><col style="width:170px"><col style="width:190px"><col style="width:150px"></colgroup>
+          <thead><tr><th>系统</th><th>LoCoMo</th><th>LoCoMo-Plus</th><th>落差</th></tr></thead>
+          <tbody>
+            <tr><td class="name">T-Mem</td><td class="m">80.26%</td><td class="m">74.81%</td><td class="m">-5.45pp ✓</td></tr>
+            <tr><td class="name">HyperMem</td><td class="m">77.01%</td><td class="m">48.63%</td><td class="m">-28.38pp</td></tr>
+            <tr><td class="name">A-Mem / SeCom / Mem0 等</td><td class="m">—</td><td class="m">—</td><td class="m">-28 ~ -50pp</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:18px;">
+      <b>T-Mem 的差异化特点</b>　① 唯一专门攻克联想型召回，并把解法前移到写入期；② 证据与检索路径解耦，Trigger 不污染 QA 上下文；③ 有 EMNLP 2026 论文与可复现评测协议。<b>局限</b>　它是离线评测流水线（build → eval），不是在线记忆服务；落地生产需自行补上在线写入与检索层。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S22 · Q4 正面对决
+     ============================================================ -->
+<section class="slide airy" data-sec="正面对决">
+  <div class="frame">
+    <div class="topbar reveal"><h2>同一个联想型问题，五个系统给出了五种答案</h2><span class="lab">HEAD TO HEAD · Q4 ASSOCIATIVE</span></div>
+    <div class="lede reveal" style="margin-bottom:20px;">Q4：「客户抱怨的根源，和我们架构上的薄弱点是一类问题吗？」—— 与各条记忆均无词面重合</div>
+    <div class="cols reveal showdown5" style="gap:18px;">
+      <div class="vd">
+        <div class="vh"><h4>Mem0</h4><span class="mk dim">✗</span></div>
+        <div class="mono-s dim" style="margin-bottom:12px;">多信号融合</div>
+        <dl>
+          <dt>召回</dt><dd>仅 F4（支付对接）</dd>
+          <dt>关键分</dt><dd>语义 0.41 · BM25 0.00 · 实体 0.12</dd>
+          <dt>答案</dt><dd>「我们的薄弱点是支付对接。」</dd>
+        </dl>
+        <div class="verdict"><b>✗ 偏窄</b>　完全没有关联到 D2 的报关</div>
+      </div>
+      <div class="vd">
+        <div class="vh"><h4>Hindsight-CN</h4><span class="mk dim">◐</span></div>
+        <div class="mono-s dim" style="margin-bottom:12px;">四路并行 + Rerank</div>
+        <dl>
+          <dt>召回</dt><dd>experience 节点（北京/物流客户）</dd>
+          <dt>关键分</dt><dd>图谱 0.71 · 语义 0.44 · 关键词 0.06</dd>
+          <dt>答案</dt><dd>「客户抱怨报关慢；我们卡在支付对接。」</dd>
+        </dl>
+        <div class="verdict"><b>◐ 部分</b>　两边都提到了，但未建立联系</div>
+      </div>
+      <div class="vd">
+        <div class="vh"><h4>Zep / Graphiti</h4><span class="mk">✓</span></div>
+        <div class="mono-s dim" style="margin-bottom:12px;">图遍历 + 混合检索</div>
+        <dl>
+          <dt>召回</dt><dd>报关流程边 + 支付对接边（两条都到手）</dd>
+          <dt>关键分</dt><dd>图遍历 0.74 · 语义 0.40 · BM25 0.05</dd>
+          <dt>答案</dt><dd>「都卡在外部环节：报关慢 + 支付未联调。」</dd>
+        </dl>
+        <div class="verdict"><b>✓ 命中</b>　共同抽象由 LLM 现场合成，非系统预置</div>
+      </div>
+      <div class="vd">
+        <div class="vh"><h4>Honcho-CN</h4><span class="mk">✓</span></div>
+        <div class="mono-s dim" style="margin-bottom:12px;">Deriver + Dream</div>
+        <dl>
+          <dt>召回</dt><dd>归纳结论「反复关注外部依赖方风险」</dd>
+          <dt>关键分</dt><dd>不依赖相似度，取决于 Dream 是否已跑</dd>
+          <dt>答案</dt><dd>「是的，都是对外部环节的依赖，且都缺兜底。」</dd>
+        </dl>
+        <div class="verdict"><b>✓ 命中</b>　但前提是 Dream 异步任务已执行</div>
+      </div>
+      <div class="vd">
+        <div class="vh"><h4>T-Mem</h4><span class="mk">✓✓</span></div>
+        <div class="mono-s dim" style="margin-bottom:12px;">Trigger 增强检索</div>
+        <dl>
+          <dt>召回</dt><dd>I_07（报关）+ I_11（支付）同时拉起</dd>
+          <dt>关键分</dt><dd>T_Brg 触发器「外部流程依赖」命中</dd>
+          <dt>答案</dt><dd>「同类问题：均强依赖第三方流程且无异步补偿。」</dd>
+        </dl>
+        <div class="verdict"><b>✓✓ 完全命中</b>　且给出共同抽象</div>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:26px;">
+      <b>结论</b>　联想型问题不是「检索调得不够好」，而是「写入时没为它准备路径」。Mem0 与 Hindsight 都在查询侧优化，只能部分缓解；Zep 靠图遍历把两条边都拉到手，但「第三方流程依赖」这个共同抽象要 LLM 现场合成；Honcho 靠后台推理绕过检索，代价是延迟与依赖异步任务；T-Mem 把成本前移到写入期，用一次额外的 LLM 预演换取召回覆盖率的跃升。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S23 · 能力矩阵
+     ============================================================ -->
+<section class="slide" data-sec="能力矩阵">
+  <div class="frame">
+    <div class="topbar reveal"><h2>十个维度，一眼看清谁强谁弱</h2><span class="lab">CAPABILITY MATRIX · 10 × 5</span></div>
+    <div class="small dim reveal" style="margin-bottom:18px;">● 具备且成熟　◐ 部分具备或有前置条件　○ 不具备或需自行实现</div>
+    <table class="tbl reveal">
+      <colgroup><col style="width:440px"><col style="width:256px"><col style="width:256px"><col style="width:256px"><col style="width:256px"><col style="width:256px"></colgroup>
+      <thead><tr><th>能力维度</th><th>Mem0</th><th>Hindsight-CN</th><th>Zep / Graphiti</th><th>Honcho-CN</th><th>T-Mem</th></tr></thead>
+      <tbody>
+        <tr><td class="name">开箱即用（接入成本）</td><td class="m">●</td><td class="m">●</td><td class="m">◐</td><td class="m">◐</td><td class="m">○</td></tr>
+        <tr><td class="name">中文开箱（含模型/面板）</td><td class="m">○</td><td class="m">●</td><td class="m">○</td><td class="m">◐</td><td class="m">○</td></tr>
+        <tr><td class="name">生产级生态（SDK/云/插件）</td><td class="m">●</td><td class="m">◐</td><td class="m">●</td><td class="m">○</td><td class="m">○</td></tr>
+        <tr><td class="name">图结构检索</td><td class="m">◐</td><td class="m">●</td><td class="m">●</td><td class="m">◐</td><td class="m">●</td></tr>
+        <tr><td class="name">时间推理</td><td class="m">●</td><td class="m">●</td><td class="m">●</td><td class="m">◐</td><td class="m">●</td></tr>
+        <tr><td class="name">主动反思 / 推理层</td><td class="m">○</td><td class="m">●</td><td class="m">○</td><td class="m">●</td><td class="m">◐</td></tr>
+        <tr><td class="name">联想型召回</td><td class="m">○</td><td class="m">◐</td><td class="m">◐</td><td class="m">◐</td><td class="m">●</td></tr>
+        <tr><td class="name">自托管 / 完全离线</td><td class="m">◐</td><td class="m">●</td><td class="m">●</td><td class="m">●</td><td class="m">◐</td></tr>
+        <tr><td class="name">学术可复现 / 有论文</td><td class="m">◐</td><td class="m">◐</td><td class="m">◐</td><td class="m">○</td><td class="m">●</td></tr>
+        <tr><td class="name">多智能体共享状态</td><td class="m">◐</td><td class="m">◐</td><td class="m">◐</td><td class="m">●</td><td class="m">○</td></tr>
+      </tbody>
+    </table>
+    <div class="note reveal" style="margin-top:24px;">
+      <b>总分观感</b>　Mem0 赢在工程，Hindsight-CN 赢在中文与离线，Zep 赢在时间维度与溯源能力，Honcho-CN 赢在多智能体与推理深度，T-Mem 赢在召回覆盖率。没有全能冠军，只有取舍。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S24 · 选型建议
+     ============================================================ -->
+<section class="slide airy" data-sec="选型建议">
+  <div class="frame">
+    <div class="topbar reveal"><h2>按你的约束条件选，而不是按 Star 数选</h2><span class="lab">DECISION GUIDE · 5 SCENARIOS</span></div>
+    <div class="lede reveal" style="margin-bottom:20px;">五个真实决策场景，给出推荐与理由</div>
+    <div class="cols reveal" style="gap:18px;margin-bottom:22px;grid-template-columns:repeat(5,1fr);">
+      <div class="panel" style="padding:18px 20px;">
+        <div class="small dim" style="margin-bottom:8px;">如果你的约束是</div>
+        <div class="small" style="font-weight:600;margin-bottom:12px;">要给产品快速加记忆，不想自己运维</div>
+        <div class="chip fill" style="margin-bottom:12px;">推荐 Mem0</div>
+        <ul class="b" style="font-size:13.5px;"><li>先用 Library 验证：pip install mem0ai，两行代码接入</li><li>上线后转 Cloud，避免自建向量库与检索调优</li><li>注意：公开基准分数来自托管版，开源 SDK 有差距</li></ul>
+      </div>
+      <div class="panel" style="padding:18px 20px;">
+        <div class="small dim" style="margin-bottom:8px;">如果你的约束是</div>
+        <div class="small" style="font-weight:600;margin-bottom:12px;">中文场景、私有化部署、可能没外网</div>
+        <div class="chip fill" style="margin-bottom:12px;">推荐 Hindsight-CN</div>
+        <ul class="b" style="font-size:13.5px;"><li>一条 docker run，模型已内嵌镜像，arm64 也能跑</li><li>中文 Web 面板便于运维与人工纠偏</li><li>注意：跟随上游演进，重大需求建议直接看原版</li></ul>
+      </div>
+      <div class="panel" style="padding:18px 20px;">
+        <div class="small dim" style="margin-bottom:8px;">如果你的约束是</div>
+        <div class="small" style="font-weight:600;margin-bottom:12px;">多个 Agent 要共享同一份用户状态，且要「结论」</div>
+        <div class="chip fill" style="margin-bottom:12px;">推荐 Honcho-CN</div>
+        <ul class="b" style="font-size:13.5px;"><li>Workspace 隔离环境，Peer 承载任意实体，天然支持多智能体</li><li>结论是被推理出来的，可直接作为上下文拼装</li><li>注意：确认 Dream 异步链路跑通，否则推理价值打折</li></ul>
+      </div>
+      <div class="panel" style="padding:18px 20px;">
+        <div class="small dim" style="margin-bottom:8px;">如果你的约束是</div>
+        <div class="small" style="font-weight:600;margin-bottom:12px;">要能回答「某个时间点的事实是什么」，且要能自证来源</div>
+        <div class="chip fill" style="margin-bottom:12px;">推荐 Zep / Graphiti</div>
+        <ul class="b" style="font-size:13.5px;"><li>双时间模型：冲突自动失效，可查任意时刻的真值</li><li>每条事实都能溯源到 Episode，适合审计与合规</li><li>注意：自托管要自带图数据库；不想运维就用 Zep Cloud</li></ul>
+      </div>
+      <div class="panel" style="padding:18px 20px;">
+        <div class="small dim" style="margin-bottom:8px;">如果你的约束是</div>
+        <div class="small" style="font-weight:600;margin-bottom:12px;">做长对话记忆研究，或追求召回覆盖率上限</div>
+        <div class="chip fill" style="margin-bottom:12px;">推荐 T-Mem</div>
+        <ul class="b" style="font-size:13.5px;"><li>有论文、有协议、有可复现评测，适合做基线对比</li><li>把它的 Trigger 思路迁移到任何现有记忆系统都能获益</li><li>注意：是离线流水线，不是在线服务，需自行工程化</li></ul>
+      </div>
+    </div>
+    <div class="note reveal">
+      <b>组合使用：把三者拼成一个完整的记忆栈</b>　<b>方案 A（在线优先）</b>　Mem0 承担在线记忆读写 → 在 add() 前用一次 LLM 为每条 fact 预生成「可能被怎么问」，把 T-Mem 的 Trigger 思想搬到生产系统里，成本只多一次写入侧调用。
+      <b>方案 B（中文私有化优先）</b>　Hindsight-CN 或 Graphiti 作为事实底座（存原文、图谱、时间线）→ 上层接 Honcho 做推理层，用结论而非原文组装上下文。两者都以服务形态提供，通过 Agent 侧的编排串联。
+      <b>注意</b>　组合会引入一致性问题 —— 两侧记忆可能不同步。建议先明确「谁是真值来源」，再决定另一侧的更新策略。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S25 · 局限与风险
+     ============================================================ -->
+<section class="slide airy" data-sec="局限与风险">
+  <div class="frame">
+    <div class="topbar reveal"><h2>每个方案都有需要提前知道的坑</h2><span class="lab">RISK REGISTER · READ BEFORE ADOPTING</span></div>
+    <div class="lede reveal" style="margin-bottom:20px;">这些是在选型评审会上最该被问到的问题</div>
+    <div class="idx reveal">
+      <div class="idx-row" style="grid-template-columns:170px 1fr;"><span class="num">Mem0</span><div><p>公开基准成绩来自托管平台，含未开源的专有优化，开源 SDK 实测会有落差；ADD-only 意味着记忆只增不减，长期运行需自行规划去重与归档策略。</p></div></div>
+      <div class="idx-row" style="grid-template-columns:170px 1fr;"><span class="num">Hindsight-CN</span><div><p>仓库仅 13★，由个人维护的中文发行版，价值高度依赖上游 vectorize-io/hindsight；若上游重构 API，中文版同步可能滞后。</p></div></div>
+      <div class="idx-row" style="grid-template-columns:200px 1fr;"><span class="num">Zep / Graphiti</span><div><p>getzep/zep 已转型为「示例与集成」仓库，真正的引擎在 getzep/graphiti（31,081★），旧的 Community Edition 已废弃；自托管必须自带图数据库（Neo4j 5.26 / FalkorDB / Neptune，Kuzu 已废弃），运维成本高于 Mem0；摄入强依赖 LLM 稳定的结构化 JSON 输出，本地小模型易抽取失败；Zep Cloud 的 sub-200ms 是托管版口径，自托管性能取决于你自己的部署。</p></div></div>
+      <div class="idx-row" style="grid-template-columns:170px 1fr;"><span class="num">Honcho-CN</span><div><p>仓库仅 6★ 且自 2026-05 起未再更新，属个人适配版，长期维护性存疑；推理深度换来的代价是延迟与成本，且 Dream 必须异步跑通才有意义。</p></div></div>
+      <div class="idx-row" style="grid-template-columns:170px 1fr;"><span class="num">T-Mem</span><div><p>本质是离线评测流水线而非在线服务；构建阶段 LLM 调用密集（401 条对话的 LoCoMo-Plus 全量构建需关注并发与费用），落地生产要自己补上在线读写层。</p></div></div>
+      <div class="idx-row" style="grid-template-columns:170px 1fr;"><span class="num">通用问题</span><div><p>四个项目的评测分数来自不同协议：QA 模型、judge 模型、数据集、提示词各不相同，绝不可直接横向比较绝对值。本演示中的对比仅用于说明机制差异。</p></div></div>
+    </div>
+    <div class="note reveal" style="margin-top:28px;">
+      <b>给决策者的一句话</b>　这四个项目都还处在快速演进期。真正的风险不是「选错」，而是把业务逻辑与某个特定 SDK 深度耦合而不留抽象层 —— 建议始终通过一层自己的 Memory 接口封装，保证可替换。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S26 · 一页速查（closing）
+     ============================================================ -->
+<section class="slide airy" data-sec="一页速查">
+  <div class="frame">
+    <div class="topbar reveal"><h2>如果只记住一件事</h2><span class="lab">CHEAT SHEET · FIVE SENTENCES</span></div>
+    <div class="lede reveal" style="margin-bottom:20px;">每句话对应一个项目最本质的设计选择</div>
+    <div class="cols c2 reveal" style="gap:22px;margin-bottom:24px;grid-template-rows:1fr 1fr;">
+      <div class="panel" style="padding:18px 22px;"><div class="mono-s" style="margin-bottom:6px;">Mem0</div><h4 style="font-size:30px;margin-bottom:8px;">记忆 = 基础设施</h4><div class="small" style="margin-bottom:10px;">把长期记忆封装成一层可插拔的服务，用单遍 ADD-only 抽取 + 多信号融合检索，换取最低的接入成本与最完整的生态。</div><div class="small"><b style="font-weight:600;">选它</b>　当你需要「这周就上线」</div></div>
+      <div class="panel" style="padding:18px 22px;"><div class="mono-s" style="margin-bottom:6px;">Hindsight-CN</div><h4 style="font-size:30px;margin-bottom:8px;">记忆 = 分了类的大脑</h4><div class="small" style="margin-bottom:10px;">世界常识/交互记录/观察/思维模型四类分开存，四路并行检索（含图谱路）+ Reranker，且中文模型内嵌镜像可完全离线。</div><div class="small"><b style="font-weight:600;">选它</b>　当你在中文私有化环境</div></div>
+      <div class="panel" style="padding:18px 22px;grid-column:1/-1;"><div class="mono-s" style="margin-bottom:6px;">Zep / Graphiti</div><h4 style="font-size:30px;margin-bottom:8px;">记忆 = 会自我修订的时间线</h4><div class="small" style="margin-bottom:10px;">事实带有效窗口，冲突时旧边自动失效而非覆盖；Episode 保留原始溯源，语义 + BM25 + 图遍历三路混合检索，亚秒级返回。</div><div class="small"><b style="font-weight:600;">选它</b>　当你要能回答「9 月 20 日的事实是什么」</div></div>
+      <div class="panel" style="padding:18px 22px;"><div class="mono-s" style="margin-bottom:6px;">Honcho-CN</div><h4 style="font-size:30px;margin-bottom:8px;">记忆 = 推理的产物</h4><div class="small" style="margin-bottom:10px;">写入即入队，Deriver 产出显式与演绎结论，Dreamer 再做归纳与溯因；你拿到的不是原文片段，而是关于这个实体的结论。</div><div class="small"><b style="font-weight:600;">选它</b>　当你要的是「洞察」不是「原文」</div></div>
+      <div class="panel" style="padding:18px 22px;"><div class="mono-s" style="margin-bottom:6px;">T-Mem</div><h4 style="font-size:30px;margin-bottom:8px;">记忆 = 带引信的图</h4><div class="small" style="margin-bottom:10px;">写入时为每条记忆预演未来的提问方式，生成四类 Trigger；把「怎么被找到」与「找到了什么」解耦，从而覆盖联想型召回。</div><div class="small"><b style="font-weight:600;">选它</b>　当你的用户会问「没想到的问题」</div></div>
+    </div>
+    <div class="note reveal">
+      <b>贯穿全篇的一条主线</b>　记忆系统的演进方向，正在从「把原文存好、检索得更准」，转向「在写入时就为将来可能的问题做好准备」。Mem0 与 Hindsight 在前半段做到极致，Zep 额外把「事实的生命周期」也管了起来，T-Mem 明确押注后半段，Honcho 则用推理绕开了检索本身。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     S27 · 数据来源（colophon）
+     ============================================================ -->
+<section class="slide" data-sec="数据来源">
+  <div class="frame">
+    <div class="topbar reveal"><h2>数据来源与说明</h2><span class="lab">COLOPHON · 2026-09-22</span></div>
+    <table class="tbl reveal" style="margin-bottom:22px;">
+      <colgroup><col style="width:340px"><col style="width:600px"><col style="width:300px"><col style="width:220px"><col style="width:280px"></colgroup>
+      <thead><tr><th>项目</th><th>仓库地址</th><th>Star（2026-09-22）</th><th>语言</th><th>最近更新</th></tr></thead>
+      <tbody>
+        <tr><td class="name">Mem0</td><td class="m">github.com/mem0ai/mem0</td><td class="m">65,793</td><td class="m">Python</td><td class="m">2026-09-21</td></tr>
+        <tr><td class="name">Hindsight-CN</td><td class="m">github.com/vulnnull/hindsight-cn</td><td class="m">13（上游 24,719）</td><td class="m">Python</td><td class="m">2026-09-22</td></tr>
+        <tr><td class="name">Honcho-CN</td><td class="m">github.com/WZXsea/honcho-cn</td><td class="m">6</td><td class="m">Python</td><td class="m">2026-05-07</td></tr>
+        <tr><td class="name">Zep（示例与集成仓）</td><td class="m">github.com/getzep/zep</td><td class="m">4,927</td><td class="m">Python</td><td class="m">2026-09-18</td></tr>
+        <tr><td class="name">Graphiti（开源核心）</td><td class="m">github.com/getzep/graphiti</td><td class="m">31,081</td><td class="m">Python</td><td class="m">2026-09-21</td></tr>
+        <tr><td class="name">T-Mem</td><td class="m">github.com/Sherlockwz/T-Mem</td><td class="m">131</td><td class="m">Python</td><td class="m">2026-09-09</td></tr>
+      </tbody>
+    </table>
+    <div class="cols c2 reveal" style="gap:34px;">
+      <div>
+        <div class="small reveal" style="margin-bottom:12px;"><b style="font-weight:600;">架构与组件描述</b>　取自各项目 README、官方文档与仓库目录结构（hindsight 官方站 hindsight.vectorize.io；honcho 官方站 honcho.dev；zep 文档 help.getzep.com）。</div>
+        <div class="small reveal" style="margin-bottom:12px;"><b style="font-weight:600;">评测数据</b>　Mem0：LoCoMo 92.5 / LongMemEval 94.4 / BEAM 1M 64.1（托管平台口径）。T-Mem：LoCoMo 80.26% / F1 51.96，LoCoMo-Plus 落差 -5.45pp（主论文口径）。Zep：DMR 94.8%（MemGPT 93.4%），LongMemEval 准确率最高 +18.5%、延迟降低 90%（arXiv:2501.13956 口径）。两者协议不同，不可直接横比。</div>
+      </div>
+      <div>
+        <div class="small reveal" style="margin-bottom:12px;"><b style="font-weight:600;">Mock 数据声明</b>　本演示中「张伟 / Orca 项目 / 4 条对话 / Q1-Q4」以及所有检索打分均为构造的演示数据，用于说明机制差异，不代表任何项目真实性能。</div>
+        <div class="small reveal"><b style="font-weight:600;">引用文献</b>　Mem0: arXiv:2504.19413 · Hindsight: arXiv:2512.12818 · T-Mem: arXiv:2606.15405（EMNLP 2026 Main Conference） · Zep: arXiv:2501.13956。</div>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:26px;">本演示由 WorkBuddy 生成 · 数据抓取于 2026-09-22 / 2026-09-23 · 共 31 页</div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<!-- Out-of-stage UI: progress bar, nav hint, inline-edit toggle -->
+<div class="pbar" id="pbar"></div>
+<div class="hint">← → 翻页 · E 编辑 · F 全屏</div>
+<div class="edit-hotzone" id="hotzone"></div>
+<button class="edit-toggle" id="editToggle">✎ 编辑</button>
+
+<script>
+/* ===========================================
+   SLIDE PRESENTATION CONTROLLER
+   Fixed 1920×1080 stage, uniformly scaled.
+   =========================================== */
+class SlidePresentation {
+    constructor(){
+        this.stage  = document.getElementById('deckStage');
+        this.slides = Array.from(document.querySelectorAll('.slide'));
+        this.total  = this.slides.length;
+        this.current = 0;
+        this.buildChrome();
+        this.buildDecorations();
+        this.setupStageScale();
+        this.setupReveals();
+        this.setupKeyboardNav();
+        this.setupTouchNav();
+        this.setupWheelNav();
+        this.showSlide(0);
+    }
+
+    /* --- Universal chrome: hairlines, page number, section tag --- */
+    buildChrome(){
+        const hairT = document.createElement('span');
+        hairT.className = 'hair t';
+        const hairB = document.createElement('span');
+        hairB.className = 'hair b';
+        this.stage.appendChild(hairT);
+        this.stage.appendChild(hairB);
+
+        this.slides.forEach((slide, i) => {
+            const pg = document.createElement('span');
+            pg.className = 'pg';
+            pg.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(this.total).padStart(2, '0');
+            slide.appendChild(pg);
+
+            const sec = document.createElement('span');
+            sec.className = 'sectag';
+            sec.textContent = slide.dataset.sec || '';
+            slide.appendChild(sec);
+        });
+    }
+
+    /* --- Pixel-glitch columns and QR mosaic patches --- */
+    buildDecorations(){
+        // stair-stepped scanline column; widths vary per seed
+        const steps = [150,104,138,72,120,150,86,132,64,146,98,124];
+        document.querySelectorAll('[data-glitch]').forEach(el => {
+            const seed = parseInt(el.dataset.glitch, 10) || 1;
+            steps.forEach((w, i) => {
+                const bar = document.createElement('i');
+                bar.style.width = Math.round(w * (0.6 + ((seed * (i + 3)) % 5) / 12)) + 'px';
+                bar.style.transitionDelay = (0.35 + i * 0.045) + 's';
+                el.appendChild(bar);
+            });
+        });
+        // 8x8 QR-style mosaic; deterministic pattern per seed
+        document.querySelectorAll('[data-qr]').forEach(el => {
+            const seed = parseInt(el.dataset.qr, 10) || 1;
+            for (let i = 0; i < 64; i++) {
+                const c = document.createElement('span');
+                const on = ((i * 7 + seed * 13 + Math.floor(i / 8) * 3) % 5) < 2;
+                c.style.opacity = on ? '.85' : '0';
+                el.appendChild(c);
+            }
+        });
+    }
+
+    /* --- Stage scaling: one transform, never reflows content --- */
+    setupStageScale(){
+        const scale = () => {
+            const f = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+            const x = (window.innerWidth  - 1920 * f) / 2;
+            const y = (window.innerHeight - 1080 * f) / 2;
+            this.stage.style.transform = `translate(${x}px, ${y}px) scale(${f})`;
+        };
+        scale();
+        window.addEventListener('resize', scale);
+    }
+
+    /* --- Assign staggered transition delays to .reveal elements --- */
+    setupReveals(){
+        this.slides.forEach(slide => {
+            const items = slide.querySelectorAll('.reveal');
+            items.forEach((el, i) => {
+                el.style.transitionDelay = Math.min(0.07 * i + 0.05, 0.95).toFixed(3) + 's';
+            });
+        });
+    }
+
+    setupKeyboardNav(){
+        document.addEventListener('keydown', e => {
+            if (e.target.getAttribute && e.target.getAttribute('contenteditable') === 'true') return;
+            if (['ArrowRight','PageDown',' ','Enter'].includes(e.key)) { e.preventDefault(); this.next(); }
+            else if (['ArrowLeft','PageUp','Backspace'].includes(e.key)) { e.preventDefault(); this.prev(); }
+            else if (e.key === 'Home') this.showSlide(0);
+            else if (e.key === 'End')  this.showSlide(this.total - 1);
+            else if (e.key === 'f' || e.key === 'F') {
+                if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                else document.exitFullscreen();
+            }
+        });
+    }
+
+    setupTouchNav(){
+        let sx = 0, sy = 0;
+        document.addEventListener('touchstart', e => { sx = e.changedTouches[0].clientX; sy = e.changedTouches[0].clientY; }, {passive:true});
+        document.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - sx;
+            const dy = e.changedTouches[0].clientY - sy;
+            if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) { dx < 0 ? this.next() : this.prev(); }
+        }, {passive:true});
+    }
+
+    setupWheelNav(){
+        let locked = false;
+        document.addEventListener('wheel', e => {
+            if (locked) return;
+            locked = true; setTimeout(() => locked = false, 420);
+            if (e.deltaY > 0 || e.deltaX > 0) this.next(); else this.prev();
+        }, {passive:true});
+    }
+
+    next(){ this.showSlide(Math.min(this.current + 1, this.total - 1)); }
+    prev(){ this.showSlide(Math.max(this.current - 1, 0)); }
+
+    showSlide(index){
+        this.current = Math.max(0, Math.min(index, this.total - 1));
+        this.slides.forEach((slide, i) => {
+            const on = (i === this.current);
+            slide.classList.toggle('active', on);
+            slide.classList.toggle('visible', on);
+        });
+        document.getElementById('pbar').style.width = ((this.current + 1) / this.total * 100) + '%';
+        if (window.location.hash !== '#' + (this.current + 1)) {
+            history.replaceState(null, '', '#' + (this.current + 1));
+        }
+    }
+}
+
+const deck = new SlidePresentation();
+const start = parseInt((location.hash || '#1').slice(1), 10);
+if (start > 1) deck.showSlide(start - 1);
+
+/* ===========================================
+   INLINE EDITING — hover hotzone or E key, saves to localStorage
+   =========================================== */
+class InlineEditor {
+    constructor(){
+        this.active = false;
+        this.btn = document.getElementById('editToggle');
+        this.key = 'deck-edit-' + location.pathname;
+        this.bind();
+        this.restore();
+    }
+    bind(){
+        const hotzone = document.getElementById('hotzone');
+        let timer = null;
+        this.btn.addEventListener('click', () => this.toggle());
+        hotzone.addEventListener('click', () => this.toggle());
+        hotzone.addEventListener('mouseenter', () => { clearTimeout(timer); this.btn.classList.add('show'); });
+        hotzone.addEventListener('mouseleave', () => {
+            timer = setTimeout(() => { if (!this.active) this.btn.classList.remove('show'); }, 400);
+        });
+        this.btn.addEventListener('mouseenter', () => clearTimeout(timer));
+        this.btn.addEventListener('mouseleave', () => {
+            timer = setTimeout(() => { if (!this.active) this.btn.classList.remove('show'); }, 400);
+        });
+        document.addEventListener('keydown', e => {
+            if ((e.key === 'e' || e.key === 'E') && !(e.target.getAttribute && e.target.getAttribute('contenteditable') === 'true')) {
+                e.preventDefault(); this.toggle();
+            }
+            if (e.key === 's' && (e.ctrlKey || e.metaKey) && this.active) { e.preventDefault(); this.save(); }
+        });
+    }
+    targets(){ return document.querySelectorAll('.slide h1,.slide h2,.slide h3,.slide h4,.slide p,.slide dd,.slide td,.slide th,.slide li,.slide pre'); }
+    toggle(){
+        this.active = !this.active;
+        this.btn.classList.toggle('active', this.active);
+        this.btn.textContent = this.active ? '✓ 完成' : '✎ 编辑';
+        this.targets().forEach(el => {
+            if (this.active) { el.setAttribute('contenteditable', 'true'); el.addEventListener('input', () => this.save()); }
+            else { el.removeAttribute('contenteditable'); }
+        });
+        if (this.active) this.btn.classList.add('show');
+    }
+    save(){
+        const data = {};
+        this.targets().forEach((el, i) => { data[i] = el.innerHTML; });
+        try { localStorage.setItem(this.key, JSON.stringify(data)); } catch (e) {}
+    }
+    restore(){
+        try {
+            const raw = localStorage.getItem(this.key);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            this.targets().forEach((el, i) => { if (data[i] !== undefined) el.innerHTML = data[i]; });
+        } catch (e) {}
+    }
+}
+const editor = new InlineEditor();
+</script>
+</body>
+</html>
