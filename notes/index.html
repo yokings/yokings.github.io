@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>随想随记 - 技术探索笔记</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a0a1a;
+            --bg-secondary: #12122a;
+            --bg-card: #1a1a3e;
+            --text: #e0e0f0;
+            --text-dim: #8888aa;
+            --accent: #6C5CE7;
+            --accent-light: #a29bfe;
+            --border: #2a2a4a;
+            --glow: rgba(108, 92, 231, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        /* 密码验证页 */
+        .auth-container {
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+            padding: 48px 36px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .auth-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--glow) 0%, transparent 60%);
+            opacity: 0.15;
+            pointer-events: none;
+        }
+
+        .auth-icon {
+            font-size: 2.5rem;
+            margin-bottom: 16px;
+        }
+
+        .auth-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--accent-light), #c4b5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .auth-subtitle {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            margin-bottom: 32px;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .auth-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--glow);
+        }
+
+        .auth-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .auth-btn {
+            width: 100%;
+            padding: 14px;
+            margin-top: 16px;
+            background: var(--accent);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .auth-btn:hover {
+            background: var(--accent-light);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px var(--glow);
+        }
+
+        .auth-btn:active {
+            transform: translateY(0);
+        }
+
+        .auth-error {
+            color: #fd79a8;
+            font-size: 0.85rem;
+            margin-top: 12px;
+            min-height: 1.2em;
+            transition: opacity 0.2s;
+        }
+
+        .auth-back {
+            display: inline-block;
+            margin-top: 24px;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .auth-back:hover {
+            color: var(--accent-light);
+        }
+
+        /* 笔记列表页 */
+        .notes-container {
+            display: none;
+            width: 100%;
+            min-height: 100vh;
+            padding: 40px 24px;
+        }
+
+        .notes-container.active {
+            display: block;
+        }
+
+        .notes-header {
+            max-width: 800px;
+            margin: 0 auto 40px;
+            text-align: center;
+        }
+
+        .notes-header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--accent-light), #c4b5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .notes-header p {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+
+        .notes-list {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .note-item {
+            display: block;
+            padding: 24px 28px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s;
+        }
+
+        .note-item:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .note-item h2 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text);
+        }
+
+        .note-item p {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        .note-meta {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            opacity: 0.7;
+        }
+
+        .notes-footer {
+            max-width: 800px;
+            margin: 40px auto 0;
+            text-align: center;
+        }
+
+        .notes-footer a {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .notes-footer a:hover {
+            color: var(--accent-light);
+        }
+    </style>
+</head>
+<body>
+    <!-- 密码验证页 -->
+    <div class="auth-container" id="authPage">
+        <div class="auth-icon">🔒</div>
+        <div class="auth-title">随想随记</div>
+        <div class="auth-subtitle">技术笔记专栏 · 请输入密码进入</div>
+        <input type="password" class="auth-input" id="passwordInput" placeholder="请输入密码" autofocus>
+        <button class="auth-btn" id="authBtn">进入</button>
+        <div class="auth-error" id="authError"></div>
+        <a href="../index.html" class="auth-back">← 返回首页</a>
+    </div>
+
+    <!-- 笔记列表页 -->
+    <div class="notes-container" id="notesPage">
+        <div class="notes-header">
+            <h1>随想随记</h1>
+            <p>技术笔记与思考</p>
+        </div>
+        <div class="notes-list" id="notesList">
+            <!-- 笔记列表会动态生成 -->
+            <div style="text-align: center; color: var(--text-dim); padding: 40px;">
+                <p>暂无笔记，等待添加中...</p>
+            </div>
+        </div>
+        <div class="notes-footer">
+            <a href="../index.html">← 返回首页</a>
+        </div>
+    </div>
+
+    <script>
+        // 笔记列表配置 - 添加笔记时在此处注册
+        const notes = [
+            // 示例格式：
+            // {
+            //     title: "笔记标题",
+            //     desc: "笔记描述",
+            //     date: "2026-10-10",
+            //     url: "notes/example.html"
+            // }
+        ];
+
+        const PASSWORD = "syq";
+        const SESSION_KEY = "notes_auth";
+
+        function checkAuth() {
+            return sessionStorage.getItem(SESSION_KEY) === "ok";
+        }
+
+        function showNotes() {
+            document.getElementById('authPage').style.display = 'none';
+            const notesPage = document.getElementById('notesPage');
+            notesPage.classList.add('active');
+
+            const listEl = document.getElementById('notesList');
+            if (notes.length === 0) {
+                listEl.innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 40px;"><p>暂无笔记，等待添加中...</p></div>';
+                return;
+            }
+
+            listEl.innerHTML = notes.map(n => `
+                <a class="note-item" href="${n.url}">
+                    <h2>${n.title}</h2>
+                    <p>${n.desc}</p>
+                    <div class="note-meta">${n.date}</div>
+                </a>
+            `).join('');
+        }
+
+        function tryAuth() {
+            const input = document.getElementById('passwordInput').value;
+            if (input === PASSWORD) {
+                sessionStorage.setItem(SESSION_KEY, "ok");
+                showNotes();
+            } else {
+                const errEl = document.getElementById('authError');
+                errEl.textContent = '密码错误，请重试';
+                document.getElementById('passwordInput').value = '';
+                document.getElementById('passwordInput').focus();
+            }
+        }
+
+        document.getElementById('authBtn').addEventListener('click', tryAuth);
+        document.getElementById('passwordInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') tryAuth();
+        });
+
+        // 页面加载时检查是否已验证
+        if (checkAuth()) {
+            showNotes();
+        }
+    </script>
+</body>
+</html>
