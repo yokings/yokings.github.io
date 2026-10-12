@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>用 Jev 构建 Agentic Harness：一份构建者指南</title>
+<meta name="description" content="Avid 的 3,500 字构建日志：Jev 作为 keel 这一本地优先 Rust 编码工作区中的决策层。">
+<style>
+:root{
+  --bg:#fbfaf8;
+  --surface:#ffffff;
+  --text:#1a1d21;
+  --text-soft:#3d444c;
+  --muted:#6e7781;
+  --line:#e4e1dc;
+  --line-soft:#eeebe6;
+  --accent:#155e75;
+  --accent-soft:#e6f0f3;
+  --warm:#b45309;
+  --warm-soft:#fdf3e7;
+  --quote-bg:#f5f3ef;
+  --radius:14px;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC",sans-serif;
+  --serif:"Songti SC","Source Han Serif SC","Noto Serif CJK SC",Georgia,"Times New Roman",serif;
+  --mono:"SF Mono",Menlo,Consolas,"Cascadia Mono","Roboto Mono",monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:17px;
+  line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:760px;margin:0 auto;padding:0 24px 100px}
+
+/* ---------- header ---------- */
+header.hero{padding:76px 0 40px;border-bottom:1px solid var(--line)}
+.kicker{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);font-weight:650;
+  background:var(--accent-soft);border-radius:100px;padding:6px 14px;margin-bottom:26px;
+}
+h1{
+  font-family:var(--serif);
+  font-size:clamp(30px,5.4vw,45px);
+  line-height:1.28;margin:0 0 20px;font-weight:700;letter-spacing:-.01em;
+}
+h1 .sub{display:block;font-size:.56em;color:var(--muted);font-weight:400;margin-top:12px;letter-spacing:0;line-height:1.5}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;color:var(--muted);font-size:14px}
+.meta .who{display:flex;align-items:center;gap:9px;color:var(--text-soft);font-weight:600}
+.avatar{
+  width:30px;height:30px;border-radius:50%;flex:none;
+  background:linear-gradient(135deg,var(--accent),#2a8ea8);
+  color:#fff;display:grid;place-items:center;font-size:13px;font-weight:700;letter-spacing:.02em;
+}
+.meta .dot{width:3px;height:3px;border-radius:50%;background:var(--line);flex:none}
+
+/* ---------- lede ---------- */
+.lede{
+  margin:34px 0 0;padding:22px 26px;
+  background:var(--quote-bg);border-radius:var(--radius);
+  border-left:3px solid var(--accent);
+  color:var(--text-soft);font-size:16.5px;line-height:1.8;
+}
+.lede b{color:var(--text);font-weight:650}
+
+/* ---------- toc ---------- */
+nav.toc{
+  margin:34px 0 0;padding:20px 24px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+}
+nav.toc .lbl{
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  font-weight:650;margin-bottom:12px;
+}
+nav.toc ol{margin:0;padding-left:20px;columns:2;column-gap:34px}
+nav.toc li{margin:5px 0;break-inside:avoid;font-size:15px;line-height:1.6}
+nav.toc a{color:var(--text-soft);text-decoration:none;border-bottom:1px solid transparent}
+nav.toc a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+@media(max-width:600px){nav.toc ol{columns:1}}
+
+/* ---------- sections ---------- */
+section{margin-top:64px}
+h2{
+  font-family:var(--serif);
+  font-size:clamp(23px,3.6vw,29px);line-height:1.4;margin:0 0 22px;
+  font-weight:700;letter-spacing:-.005em;
+}
+h2 .num{
+  display:block;font-family:var(--sans);font-size:12.5px;letter-spacing:.16em;
+  color:var(--accent);font-weight:700;margin-bottom:12px;text-transform:uppercase;
+}
+h3{
+  font-size:18.5px;margin:44px 0 14px;font-weight:680;color:var(--text);
+  letter-spacing:-.003em;line-height:1.5;
+}
+p{margin:0 0 20px}
+.lead-in{color:var(--text-soft)}
+
+/* ---------- lists ---------- */
+ul,ol{margin:0 0 22px;padding-left:26px}
+li{margin:9px 0;padding-left:3px}
+li::marker{color:var(--muted)}
+ol.steps{counter-reset:s}
+ol.steps>li{position:relative;padding-left:38px;margin:14px 0;list-style:none;counter-increment:s}
+ol.steps>li::before{
+  content:counter(s);position:absolute;left:0;top:3px;
+  width:25px;height:25px;border-radius:50%;
+  background:var(--accent-soft);color:var(--accent);
+  display:grid;place-items:center;font-size:12.5px;font-weight:700;
+}
+ul.checks{list-style:none;padding-left:0}
+ul.checks>li{
+  position:relative;padding-left:32px;margin:13px 0;list-style:none;
+  border-bottom:1px solid var(--line-soft);padding-bottom:13px;
+}
+ul.checks>li:last-child{border-bottom:none}
+ul.checks>li::before{
+  content:"";position:absolute;left:2px;top:9px;width:15px;height:15px;
+  border:1.5px solid var(--accent);border-radius:4px;background:var(--accent-soft);
+}
+
+/* ---------- quote ---------- */
+blockquote{
+  margin:30px 0;padding:22px 26px;
+  background:var(--quote-bg);border-radius:var(--radius);
+  border-left:3px solid var(--warm);
+  font-family:var(--serif);font-size:19px;line-height:1.72;color:var(--text);
+}
+blockquote p{margin:0}
+blockquote p+p{margin-top:14px}
+
+/* ---------- code / terms ---------- */
+code{
+  font-family:var(--mono);font-size:.855em;
+  background:var(--quote-bg);border:1px solid var(--line);
+  border-radius:5px;padding:2px 6px;color:var(--text);
+}
+.terms{display:flex;flex-wrap:wrap;gap:9px;margin:0 0 24px;padding:0;list-style:none}
+.terms li{
+  list-style:none;margin:0;padding:0;
+}
+.terms span{
+  display:inline-block;font-family:var(--mono);font-size:13.5px;font-weight:500;
+  background:var(--surface);border:1px solid var(--line);border-radius:8px;
+  padding:7px 14px;color:var(--text-soft);box-shadow:0 1px 2px rgba(0,0,0,.03);
+}
+.terms .zh{font-family:var(--sans);color:var(--muted);font-size:12.5px;margin-left:7px}
+
+/* ---------- figures ---------- */
+figure{margin:34px 0}
+figure .shot{
+  border:1px solid var(--line);border-radius:var(--radius);
+  overflow:hidden;background:var(--surface);line-height:0;
+}
+figure img{width:100%;height:auto;display:block}
+figcaption{
+  margin-top:13px;font-size:14px;line-height:1.65;color:var(--muted);
+  padding-left:14px;border-left:2px solid var(--line);
+}
+figcaption b{color:var(--accent);font-weight:650;margin-right:5px}
+
+/* ---------- callout ---------- */
+.callout{
+  margin:32px 0;padding:20px 24px;background:var(--warm-soft);
+  border-radius:var(--radius);border:1px solid #f0e0c8;
+  font-size:16px;line-height:1.78;color:var(--text-soft);
+}
+.callout .t{
+  display:block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--warm);font-weight:700;margin-bottom:10px;
+}
+
+/* ---------- end ---------- */
+.closing{
+  margin-top:56px;padding:26px 28px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);
+  font-family:var(--serif);font-size:19px;line-height:1.72;
+}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:34px;padding-top:26px;border-top:1px solid var(--line)}
+.tags span{
+  font-size:13px;color:var(--muted);background:var(--quote-bg);
+  border-radius:100px;padding:5px 13px;
+}
+footer{margin-top:38px;font-size:13.5px;color:var(--muted);line-height:1.7}
+footer a{color:var(--accent);word-break:break-all;text-decoration:none;border-bottom:1px solid rgba(21,94,117,.3)}
+footer a:hover{border-bottom-color:var(--accent)}
+
+@media(max-width:640px){
+  body{font-size:16.5px}
+  .wrap{padding:0 18px 70px}
+  header.hero{padding:48px 0 32px}
+  section{margin-top:50px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">Agentic Harness · 构建者指南</div>
+  <h1>
+    用 Jev 构建 Agentic Harness
+    <span class="sub">模型可以建议下一步，但走这一步的所有权仍属于宿主</span>
+  </h1>
+  <div class="meta">
+    <span class="who"><span class="avatar">A</span>Avid (@Av1dlive)</span>
+    <span class="dot"></span><span>2026 年 9 月 23 日</span>
+    <span class="dot"></span><span>约 3,500 字 · 16 分钟阅读</span>
+  </div>
+</header>
+
+<div class="lede">
+  Avid 的构建日志：<b>Jev</b> 作为 <b>keel</b>——一个本地优先的 Rust 编码工作区——内部的<b>决策层</b>。一条原则贯穿全文：模型可以建议下一步动作，但动作的所有权仍归宿主——宿主准备菜单，Jev 从中挑选，宿主再复核一遍；固定路由与进行中的会话会绕过自动选择；<b>选择本身不授予任何权限</b>。以及决策回执如何变成可重放的评测场景。
+</div>
+
+<nav class="toc">
+  <div class="lbl">目录</div>
+  <ol>
+    <li><a href="#s0">写代码之前：先让决策成形</a></li>
+    <li><a href="#s1">Jev 如何被使用：一份小而清晰的职责</a></li>
+    <li><a href="#s2">为什么要把它放进编码 Harness</a></li>
+    <li><a href="#s3">我们构建了什么：keel 0.2.0</a></li>
+    <li><a href="#s4">“自我改进”应该意味着什么</a></li>
+    <li><a href="#s5">从哪里开始</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============ 0 ============ -->
+<section id="s0">
+  <h2><span class="num">引言</span>写代码之前：先让决策成形</h2>
+
+  <p class="lead-in">起点很朴素：<strong>我想要一个会不断变好的编码智能体，而且我想知道它变好时到底改变了什么。</strong>这个系统仍然需要选择一个模型并限制它的工具范围。然后它需要复核这个选择、并判断结果。Jev 工程正是从这里进入——给系统一个你能检视的选择，然后保留足够的证据来判断这个选择是否真的有帮助。</p>
+
+  <p>每一个有用的决策都需要三样东西：</p>
+  <ul>
+    <li><strong>命名好的选项</strong>；</li>
+    <li><strong>代码可以校验的结果</strong>；</li>
+    <li><strong>事后发生了什么的记录</strong>。</li>
+  </ul>
+
+  <p>最后一条很重要：多出来的一次模型调用，仍然得证明自己的价值。本文分四个部分：Jev 如何作为决策层被使用；为什么编码 harness 是放置它的好地方；keel 里构建了什么；以及“自我改进”应该意味着什么（以及它还没有证明什么）。贯穿全文的那句话是：</p>
+
+  <blockquote><p>模型可以建议下一步动作。<br>但动作的所有权仍归宿主。</p><p>这个区别听起来很小。它改变了整个架构。</p></blockquote>
+
+  <figure>
+    <div class="shot"><img src="__FIG1__" alt="宿主准备菜单，Jev 从中挑选，宿主再复核一遍这个选择" loading="lazy"></div>
+    <figcaption><b>图 1</b>宿主准备菜单；Jev 从中挑选；宿主再复核这个选择。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01 / How Jev Is Used</span>Jev 如何被使用：一份小而清晰的职责</h2>
+
+  <p class="lead-in">在这次构建中，Jev 从宿主准备好的列表中做选择。“宿主”指的是模型周围的应用代码——在 Jev 有发言权之前，是这段代码决定哪些选项可用。它返回一个类型化的、固定且可校验格式的结果，含义是<strong>“选这个”</strong>或<strong>“我无法选择”</strong>。这就是全部的契约。</p>
+
+  <blockquote><p>宿主准备菜单；Jev 从中挑选；宿主再复核一遍这个选择。</p></blockquote>
+
+  <p>保持接口狭窄有一个很实际的理由：如果你允许模型返回任意指令，那么应用中每一个调用它的部分，都得自己想办法理解那条指令究竟是什么意思。固定格式让这份工作变得愉快地无聊——读取结果、对照当前状态校验、接受它，或者启用回退。一个好类比是：繁忙车间里的调度员可以决定哪个工位接哪件活儿，但不能悄悄改写锯子的安全规程。</p>
+
+  <figure>
+    <div class="shot"><img src="__FIG2__" alt="选择器可以介入的两个时刻：新任务路由，以及循环内的下一步焦点" loading="lazy"></div>
+    <figcaption><b>图 2</b>选择器可以介入的两个时刻——新任务的路由选择，以及循环内的下一步焦点。</figcaption>
+  </figure>
+
+  <h3>选择器可以介入的两个位置</h3>
+
+  <p><strong>1）为新任务选择路由。</strong>当一个全新的任务没有固定的 provider 或 model 时，宿主准备出符合条件的候选；Jev 或本地 Laya 在其中挑选，或者弃权。固定路由、进行中的会话、恢复的会话，都会被原样保留。</p>
+
+  <p>“挑一个最好的模型”需要一个边界：宿主必须准备好运行它所给出的每一个选项，所以要在 Jev 看到它们之前先做筛选——移除未安装或未启用的 provider、找不到的模型、不支持的推理等级。（provider 仍会在会话开始时检查自己的登录状态，即使某个路由通过了宿主的检查，这一步依然有可能失败。）</p>
+
+  <p><strong>2）在 DeepSeek 循环中选择下一步。</strong>循环提供四个焦点选项：</p>
+
+  <ul class="terms">
+    <li><span>inspect<span class="zh">检查</span></span></li>
+    <li><span>implement<span class="zh">实现</span></span></li>
+    <li><span>verify<span class="zh">验证</span></span></li>
+    <li><span>answer<span class="zh">回答</span></span></li>
+  </ul>
+
+  <figure>
+    <div class="shot"><img src="__FIG3__" alt="inspect / implement / verify / answer 各自映射到一组由宿主定义的工具包" loading="lazy"></div>
+    <figcaption><b>图 3</b><code>inspect</code> / <code>implement</code> / <code>verify</code> / <code>answer</code> 各自映射到一组由宿主定义的工具包。</figcaption>
+  </figure>
+
+  <p>每个选项都映射到一组由宿主定义的工具包。选择器返回一个焦点 id；宿主找出它被允许的工具，然后在使用前再对照当前的工具定义校验一遍。“回答”是个好例子——它不获得任何工具。如果选择器说“回答”，系统不会塞给它一个 shell 然后指望它守规矩；被允许的工具包是空的，因为在这里，“回答”本来就是这个意思。</p>
+
+  <p>一个小例子能说明这种分工：让应用去修一个解析器的 bug。固定的 provider 保持固定；对于一个启用了自动选择、全新的未固定任务，宿主给出符合条件的路由——选择器在这个列表里挑选，它没法凭空召唤出一个缺失的 provider。之后，在内嵌的 DeepSeek 循环里，决策变得更小：选择 <code>verify</code> 会改变被放行的工具包——但这并不能证明补丁是正确的；仍然必须有一次检查真的跑起来，而且它的结果仍然得有意义。设计在这里就对上了：<strong>“用哪个 worker？”和“下一步用哪些工具？”值得拥有彼此独立的边界</strong>，因为它们是不同的活儿，有不同的失败模式。</p>
+
+  <figure>
+    <div class="shot"><img src="__FIG4__" alt="宿主、决策层，以及由 provider 自有的内部循环" loading="lazy"></div>
+    <figcaption><b>图 4</b>宿主、决策层，以及由 provider 自有的内部循环——所有权归属应当在图上就看得见。</figcaption>
+  </figure>
+
+  <h3>重要的边界：外部智能体保留它们自己的循环</h3>
+
+  <p>keel 可以通过 Agent Client Protocol（ACP）承载多个编码 provider。这些 provider 运行着各自的工具循环，并且可能暴露出针对工具、上下文大小或交接的控制项。但在这次构建中，Jev 和 Laya 并不接管那些内部机制。原因是实际的：我们能读到 provider 的能力描述，但一段描述本身，并没有给宿主一条真正去执行该动作的途径——一个被列出来的斜杠命令，不会自动变成 Jev 可以调用的动作（在当前路径下，一个斜杠命令可能只是变成发给 provider 的提示词文本）。</p>
+
+  <blockquote><p>在架构图上再画一根箭头，并不会凭空造出一个 API。边界应当沿着我们能控制的代码来划。</p></blockquote>
+
+  <p>实际运行中是三层：宿主、决策层，以及可能存在的、由 provider 自有的智能体循环。宿主可以把一个新任务路由给某个 provider——但这并不能说明谁控制着该 provider 的下一次工具调用。keel 的能力审计（列出命令、技能、模式和工具）有助于划出这条线。</p>
+
+  <p>一个相邻的接触面是 computer use：<code>keel computer-use decide</code> 让 Laya 或 Jev 选择一个由宿主准备好的低风险动作 id，或者弃权——但这个命令并不执行桌面动作。“提议一个点击”和“真的去点”是两件不同的责任。兼容的 ACP 智能体可以通过 MCP 使用已安装的桌面工具；这些智能体依然拥有自己的内部循环。</p>
+
+  <h3>选择与许可是两件不同的事</h3>
+
+  <p>Jev 可以挑选一个候选。<strong>它不能批准一个危险动作。</strong>需要许可的工具走正常的权限流程；在应用要求的地方，用户批准依然适用。模型选择不授予权限，高置信度数值同样不授予。</p>
+
+  <h3>行动之前，再查一次状态</h3>
+
+  <p>在应用一个选择之前，宿主会检查这个动作是否仍与当前任务状态相符；如果 provider 列表变了，或路由已经过期，它可以拒绝并回退。在 DeepSeek 循环内部，被指名的工具在运行之前还会被再校验一次。两处检查服务于同一个目的：不让一个旧决策作用在一个已经变了的系统上。</p>
+
+  <p>“这才是无聊的部分。安全检查就该要这种无聊。”</p>
+
+  <figure>
+    <div class="shot"><img src="__FIG5__" alt="路由选择的各条路径，它们都不授予运行某个工具的权限" loading="lazy"></div>
+    <figcaption><b>图 5</b>路由选择的各条路径——它们都不授予运行某个工具的权限。</figcaption>
+  </figure>
+
+  <h3>给不确定性一条明确的出路</h3>
+
+  <p>“我无法选择”是一个有效结果。宿主仍然需要知道接下来该做什么。<strong>在调用选择器之前就定义好回退方案</strong>，然后记录它何时被用到——这样回退就不会被算成选择器的功劳。在校验结果并观察结果之后，宿主会写入一个决策事件或回执，让我们能够问出一些很普通的工程问题：候选有哪些？选择器是选了还是弃权了？校验接受了吗？发生回退了吗？随后出现了什么工具结果？</p>
+
+  <div class="callout">
+    <span class="t">重要</span>
+    这些记录不是私密的思维链。模型的解释并不能证明事情为何发生。
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02 / Why a Coding Harness</span>为什么要把它放进编码 Harness？</h2>
+
+  <p class="lead-in">人们谈论编码智能体时，常常说得好像它只是一次调用：提示进去，补丁出来。真实的工作更像一连串分叉：</p>
+
+  <ul>
+    <li>这个任务该由哪个模型处理？</li>
+    <li>智能体应该先检查文件，还是直接开始编辑？</li>
+    <li>现在哪些工具是相关的？</li>
+    <li>在决策“飞行的”这段时间里，仓库变了吗？</li>
+    <li>系统应该重试、弃权，还是去问人？</li>
+    <li>改动编译通过了吗？通过那些针对性的检查了吗？保住用户的意图了吗？</li>
+  </ul>
+
+  <p>这些决策的成本各不相同：在一个小小的重命名上用慢模型是浪费时间；而一个错误的选择，可能比一个慢选择代价更高——快模型在大型迁移中可能需要更多次重试；一个工作区里无害的工具选择，在另一个工作区里可能后果显著。<strong>Harness 持有那些塑造每次动作的细节</strong>：当前仓库状态、可用的 provider 与工具定义、权限与任务状态、检查的结果。模型只是这个系统的一部分。它不是这个系统。</p>
+
+  <p>一个独立的决策 demo 可以展示模型在三个标签之间做选择，但它不会告诉你这个选择是否可用。在编码 harness 内部，宿主能回答具体的问题：这些选项当时真的可用吗？任务是全新的、固定的，还是已经在跑了？被选中的工具在执行开始时还存在吗？权限层允许这个动作吗？返回了什么结果？验证发现了回归吗？</p>
+
+  <p>作者的立场很直白：<strong>把选项、选择和结果给我看。</strong>没有这些，所谓“智能体变好了”基本就是感觉。</p>
+
+  <figure>
+    <div class="shot"><img src="__FIG6__" alt="Laya、Jev 与 Normal：每条路径的要求与宿主检查点" loading="lazy"></div>
+    <figcaption><b>图 6</b>Laya、Jev 与 Normal——每条路径的要求，以及宿主上的检查点。</figcaption>
+  </figure>
+
+  <h3>三种模式，三种不同的选择</h3>
+
+  <p>Laya 和 Jev 是彼此独立的选择器；Normal 模式跳过选择。Core ML 是 Apple 的本地模型运行时；Jev 使用机器上已有的受保护凭据，在这次构建中没有输入密钥的界面。“总是用最聪明的模型”无视了延迟、隐私、凭据和用户意图——模式选择给了这些权衡在应用里安放的位置。</p>
+
+  <h3>多出来的调用，必须挣回自己的位置</h3>
+
+  <p>一个重要的岔路：路由可能变成它自己的小官僚机构。如果挑一个 worker 花的时间比任务本身还长，我们就做出了一个非常精致的候车厅。真正该比的，是任务的<strong>总成本</strong>：选择器耗时、worker 耗时、重试，以及审阅投入。</p>
+
+  <p>一次更便宜的决策调用，只有在整个活儿受益时才有用。本文还没有用编码基准测试证明这份回报。还有一个明摆着的限制：<strong>选择器没法挑一个宿主忘了提供的选项。</strong></p>
+
+  <p>一个好的 harness 会在“决策”和“执行”之间划一条硬线：对于路由选择，模型拿到的是候选 id——指向宿主准备好的选项的标签；这些 id 不允许模型凭空造出一条新命令或一个新 provider。在 DeepSeek 循环内部，选择器返回一个焦点 id，宿主把它变成一组具体的、被允许的工具，然后再校验一次。这意味着<strong>决策层是可替换的</strong>——调用方不需要信任它的说法，只需要信任宿主的检查；而这些检查必须清楚到可以被检视。这就是这个小小接口之所以讨喜：你可以指着那个做出的确切选择，以及它放行的确切工具集。给它更多自由，你也同时增加了更多“需要在运行跑偏时解释”的行为。</p>
+
+  <p>与此同时，harness 应当保留那些麻烦但重要的部分：把弃权显示出来，把对过期动作的拒绝记录下来，把回退到用户原始路由的情况记录下来。这些细节让我们能够追溯：宿主提供了这些选项 → 选择器返回了这个 id → 宿主依据这些规则接受或拒绝了它。</p>
+
+  <div class="callout">
+    <span class="t">诚实需要对应的那一半</span>
+    把决策层放进 harness 并不会让每个结果都正确——它只是让边界更容易说清，让结果更容易检视。它并不能证明 Jev 选了最好的模型，一次成功的构建也不是选择器带来的。还有，“本地 Laya”描述的是<strong>选择器</strong>——你的编码 worker 仍然可能调用一个托管模型，一个本地运行的 ACP 客户端同样如此。在把整个工作流称作本地或私密之前，先把每一跳都追一遍。
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03 / What We Built</span>我们构建了什么：keel 0.2.0</h2>
+
+  <p class="lead-in">这次构建是 <strong>keel 0.2.0</strong>，一个本地优先的 Mac 编码应用：</p>
+
+  <ul>
+    <li><strong>基础</strong>：一个源自 Avid 的编码工作区</li>
+    <li><strong>语言</strong>：Rust</li>
+    <li><strong>界面框架</strong>：GPUI</li>
+    <li><strong>平台</strong>：Apple Silicon，macOS 15+</li>
+  </ul>
+
+  <p>这个细节之所以重要，是因为故事里有两类工作：<strong>应用本身</strong>——一个真实的编码工作区，带着会话、provider 连接、工具和本地决策模式——以及 <strong>Jev 工程的研究与评测材料</strong>。它们相关，但不是同一个交付物。工作从一个能跑起来的编码环境（任务、仓库、provider 会话、工具）出发，这给了它一个实际的中心：决策在挂到任务、仓库、provider 会话和工具执行上时，会是什么表现。</p>
+
+  <h3>设计过程：让选择保持可读</h3>
+
+  <p>有用的设计问题很简单：<strong>Jev 可以在哪里做出一个应用仍然能够校验的选择？</strong>这个问题既标定了它该待在哪里，也解释了为什么在宿主无法强制执行结果的地方就停下。五个步骤：</p>
+
+  <ol class="steps">
+    <li><strong>识别决策边界。</strong>新任务路由和有界的下一步焦点都是可行的；provider 内部动作则不是，因为宿主并不拥有那些循环。</li>
+    <li><strong>让选项显式化。</strong>宿主知道哪些 provider 和模型已安装、已启用且有效。选择器接收候选；它不编造候选。</li>
+    <li><strong>保留用户意图。</strong>固定的路由保持固定；正在运行的会话不会被悄悄改道。全新的、未固定的工作，才是自动路由选择该待的那个狭窄位置。</li>
+    <li><strong>构建常规路径。</strong>本地 Laya 是默认；Jev 是一个刻意的 opt-in；Normal 模式为已有的路由行为保留。</li>
+    <li><strong>为失败设计一个形状。</strong>格式错误的输出、无效的 id、过期的任务详情，以及弃权——各自都有清晰的结果：拒绝、回退，或询问用户。没有人需要假装每个模型响应都是可用的。</li>
+  </ol>
+
+  <p>保守？当然。</p>
+
+  <blockquote><p>我宁愿要一个我能调试的狭窄选择，也不要一个我没法在代码里追溯的漂亮承诺。</p></blockquote>
+
+  <figure>
+    <div class="shot"><img src="__FIG7__" alt="从任务到达执行，Jev 只出现在第 4 步和第 6 步之间" loading="lazy"></div>
+    <figcaption><b>图 7</b>从任务到达执行，Jev 只出现在第 4 步和第 6 步之间。</figcaption>
+  </figure>
+
+  <h3>Jev 在请求路径中的位置</h3>
+
+  <p>用直白的话说，路由路径有八步：</p>
+
+  <ol class="steps">
+    <li>一个新任务到达，没有显式的固定路由；</li>
+    <li>宿主读取当前 provider 和模型的可用性；</li>
+    <li>它构造出一个有限的、符合条件的候选列表；</li>
+    <li>所选的决策模式调用本地 Laya 或托管的 Jev（如果已启用）；</li>
+    <li>选择器返回一个候选 id，或者弃权；</li>
+    <li>宿主检查该选择是否仍然合格、且是当前有效的；</li>
+    <li>应用启动该路由，或按策略回退；</li>
+    <li>一条决策记录捕获所发生的一切。</li>
+  </ol>
+
+  <p>固定路由和已有会话会绕过自动选择——这不是脚注，而是一条核心的产品规则。步骤选择器有它自己的检查：宿主提供焦点 id 和候选工具集，选择器返回一个焦点，宿主依据当前的工具 schema 重建工具包，并在派发时再次校验那个被指名的工具。<strong>同样的原则，不同的生命周期。</strong></p>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04 / What “Self-Improving” Should Mean</span>“自我改进”应该意味着什么</h2>
+
+  <h3>已发布的应用会记录决策，但它不会自我训练</h3>
+
+  <p>这是需要守住的那条线：keel 记录选择器的活动和结果，能够支撑评测，但它<strong>不会</strong>自动从聊天历史里训练 Laya，也<strong>不会</strong>在一次失败的运行之后悄悄重写自己的策略。这次发布并没有证明一个科幻意义上的自我改进智能体。</p>
+
+  <p>它给出的是反馈回路的<strong>起点</strong>：一个回执可以变成一个场景；一个场景可以针对改过的提示词、策略或模型重放；一个人可以审阅差异，并决定是否保留这个改动。没那么炫酷，是——但它可行：一条改动的规则、一个旧结果、一个新结果。“智能体学到东西了”只会让你猜。</p>
+
+  <h3>把一次失败，变成一个你还能再跑的案例</h3>
+
+  <p>假设一个路由选择器选中了一个转瞬即逝就不可用的 provider。别只是说“Jev 搞糊涂了”——把细节存下来：提供了哪些选项和任务状态、选中的 id、宿主的校验结果、用到的回退。然后创建一个可重放的场景：</p>
+
+  <ol class="steps">
+    <li>复现同样的候选集和任务标记；</li>
+    <li>运行基线选择器；</li>
+    <li>在相同条件下运行候选改动；</li>
+    <li>比较有效选择、弃权、回退、延迟和下游结果；</li>
+    <li>由人来审阅这个改动是否改善了预期行为。</li>
+  </ol>
+
+  <p>对于工具焦点的选择，情况有所不同：模型选中了一个在派发前 schema 就已经变了的工具包——检查重建工具集时是否把旧工具过滤掉了，以及如果仍然被请求，宿主是否会拒绝它。</p>
+
+  <p><strong>结构化记录的价值在于，它给了你重建那个决策的条件。</strong>“智能体看起来有点糊涂”给你的只是一种情绪。</p>
+
+  <h3>与普通 harness 对比：信用分配</h3>
+
+  <p>一个通过了的任务，并不能告诉我们该把功劳记给哪个组件——也许 worker 在原始路由上本来就能解决它。保持任务集和评分规则固定；对 worker、提示词、仓库或审阅者的改动，同样会影响结果。最终对比要用一个<strong>单独</strong>的任务集——不要在每个用例上调完参，再把熟悉的那些当作证明。那次难看的运行，可能暴露出一条干净演示所掩盖的缺失规则。记录失败、回退率、总耗时和审阅投入。</p>
+
+  <div class="callout">
+    <span class="t">作者明确表示</span>
+    这是一个提议中的评测设计；本文并未声称有任何实测的编码质量提升。
+  </div>
+
+  <h3>给生产变更留一道人工闸门</h3>
+
+  <p>一个改进回路可以对以下东西提出变更：候选构造规则、选择器提示词或类型化 schema、回退策略、本地模型或托管路由，以及挂在某个焦点选择上的工具包。对于每一项变更：<strong>保留旧版本、重放相关场景、检查回归，然后由一个人来批准成为新基线的那个版本。</strong></p>
+
+  <p>不做静默的自我训练；不接受那种“它变了，因为它学会了”却既没有 diff、也没有回滚路径的说法。</p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">Where to Start</span>从哪里开始</h2>
+
+  <p class="lead-in">从一个宿主能够校验的选择开始。记住六条规则：</p>
+
+  <ul class="checks">
+    <li>Jev 可以在宿主准备好的选项中挑选；<strong>它并不拥有宿主</strong>；</li>
+    <li>Laya 和 Jev 是彼此独立的模式，不是同一个模型的两个名字；</li>
+    <li>provider 自有的内部循环，仍然归 provider 所有；</li>
+    <li><strong>选择不授予权限</strong>；</li>
+    <li>记录支撑的是未来的评测回路；它们并不意味着应用会训练自己；</li>
+    <li>公开的 Jev 工程仓库包含框架与示例；keel 是这里讨论的那个应用构建。</li>
+  </ul>
+
+  <p>如果你在构建一个编码 harness，把这四件事写下来：</p>
+
+  <ul>
+    <li>它被允许做出的<strong>一个</strong>决策；</li>
+    <li>它能看到的<strong>精确</strong>选项；</li>
+    <li>当它弃权时，<strong>会发生什么</strong>；</li>
+    <li>你将如何知道结果是否有帮助。</li>
+  </ul>
+
+  <p>然后构建<strong>最窄的那条路径</strong>，去证明这些规则。</p>
+
+  <div class="closing">
+    把起点放得足够小，让一个糟糕的选择无处藏身。<br><br>
+    一个更好的智能体，需要的是一个能记住哪里出了错的系统。<br><br>
+    这正是这类工程里讨喜的地方：模型可以很聪明，而周围的系统依然可以保持清晰。
+  </div>
+
+  <div class="tags">
+    <span>Agentic Harness</span><span>Jev</span><span>Laya</span><span>Keel</span>
+    <span>Rust</span><span>Tool Routing</span><span>Agent Safety</span><span>Local-First</span>
+  </div>
+
+  <footer>
+    原文：X / The Avid Builder's Guide ——《How to Build Agentic Harness using Jev》，Avid（@Av1dlive），2026 年 9 月 23 日。<br>
+    <a href="https://x.com/Av1dlive/article/2102802621664985241">https://x.com/Av1dlive/article/2102802621664985241</a><br>
+    配套开源项目：<a href="https://github.com/codejunkie99/keel">github.com/codejunkie99/keel</a>
+    （本文为中文整理版，配图取自原文。）
+  </footer>
+</section>
+
+</main>
+</div>
+</body>
+</html>
