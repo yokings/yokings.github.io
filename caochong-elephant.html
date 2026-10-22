@@ -506,7 +506,7 @@ function createElephant() {
 
 const elephant = createElephant();
 elephant.position.set(10, 0, 0);
-elephant.visible = false;
+elephant.visible = true;
 scene.add(elephant);
 
 // ====== Stones ======
@@ -916,8 +916,8 @@ window.resetGame = function() {
     });
     stonesOnBoat.length = 0;
 
-    // Hide elephant
-    elephant.visible = false;
+    // Show elephant on shore
+    elephant.visible = true;
     elephant.position.set(10, 0, 0);
 
     // Hide modal
