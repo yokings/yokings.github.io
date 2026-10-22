@@ -986,14 +986,40 @@ function onPointerDown(event) {
     // Record start position
     dragStartPos.copy(dragObject.position);
 
-    // Set drag plane at object's current Y
-    const objY = dragObject.position.y;
-    dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, objY, 0));
+    // Raise elephant higher during drag so it's visible above boat
+    const dragHeight = (obj === elephant) ? 5 : 4;
+    dragObject.position.y = dragHeight;
+    dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, dragHeight, 0));
 
     // Calculate offset between object and intersection point
     const hitPoint = new THREE.Vector3();
     raycaster.ray.intersectPlane(dragPlane, hitPoint);
     dragOffset.copy(dragObject.position).sub(hitPoint);
+
+    // Make dragged object semi-transparent
+    setDragOpacity(dragObject, 0.75);
+}
+
+function setDragOpacity(obj, opacity) {
+    obj.traverse(child => {
+        if (child.isMesh) {
+            if (!child.userData._origTransparent) {
+                child.userData._origTransparent = child.material.transparent;
+                child.userData._origOpacity = child.material.opacity;
+            }
+            child.material.transparent = true;
+            child.material.opacity = opacity;
+        }
+    });
+}
+
+function resetDragOpacity(obj) {
+    obj.traverse(child => {
+        if (child.isMesh && child.userData._origTransparent !== undefined) {
+            child.material.transparent = child.userData._origTransparent;
+            child.material.opacity = child.userData._origOpacity;
+        }
+    });
 }
 
 function onPointerMove(event) {
@@ -1006,7 +1032,7 @@ function onPointerMove(event) {
     if (raycaster.ray.intersectPlane(dragPlane, hitPoint)) {
         dragObject.position.x = hitPoint.x + dragOffset.x;
         dragObject.position.z = hitPoint.z + dragOffset.z;
-        // Keep Y fixed
+        // Y stays at drag height
     }
 }
 
@@ -1018,6 +1044,9 @@ function onPointerUp(event) {
 
     const obj = dragObject;
     dragObject = null;
+
+    // Restore opacity
+    resetDragOpacity(obj);
 
     if (obj === elephant) {
         const distToBoat = Math.sqrt(obj.position.x * obj.position.x + obj.position.z * obj.position.z);
