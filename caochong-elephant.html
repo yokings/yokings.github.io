@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>曹冲称象 · 3D互动小游戏</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; font-family: 'Georgia', 'Microsoft YaHei', serif; }
+#canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+
+/* UI overlay */
+.ui-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 10;
+}
+
+/* Top bar */
+.top-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: 20px 40px; display: flex; justify-content: space-between; align-items: center;
+    background: linear-gradient(180deg, rgba(20,30,50,0.8) 0%, transparent 100%);
+    pointer-events: auto;
+}
+.title-text {
+    font-size: 28px; font-weight: bold; color: #fff;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    letter-spacing: 4px;
+}
+.title-text span { font-size: 16px; color: #8ecae6; letter-spacing: 2px; margin-left: 12px; }
+.step-indicator {
+    display: flex; gap: 8px; align-items: center;
+}
+.step-dot {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: bold; transition: all 0.4s;
+    border: 2px solid rgba(255,255,255,0.2);
+}
+.step-dot.active {
+    background: #4ecdc4; color: #fff; border-color: #4ecdc4;
+    box-shadow: 0 0 20px rgba(78,205,196,0.6); transform: scale(1.15);
+}
+.step-dot.done {
+    background: rgba(78,205,196,0.3); color: #4ecdc4; border-color: #4ecdc4;
+}
+.step-line {
+    width: 20px; height: 2px; background: rgba(255,255,255,0.2);
+}
+.step-line.done { background: #4ecdc4; }
+
+/* Bottom panel */
+.bottom-panel {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 24px 40px 32px;
+    background: linear-gradient(0deg, rgba(20,30,50,0.9) 0%, rgba(20,30,50,0.4) 80%, transparent 100%);
+    pointer-events: auto;
+    display: flex; justify-content: center; align-items: flex-end; gap: 16px;
+    flex-wrap: wrap;
+}
+.action-btn {
+    padding: 14px 32px; border: none; border-radius: 16px;
+    font-size: 16px; font-weight: bold; cursor: pointer;
+    transition: all 0.3s; letter-spacing: 2px;
+    font-family: inherit;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+.action-btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+.action-btn:active:not(:disabled) { transform: translateY(0); }
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-primary {
+    background: linear-gradient(135deg, #4ecdc4, #44b3aa); color: #fff;
+}
+.btn-warning {
+    background: linear-gradient(135deg, #ffa07a, #ff8c69); color: #fff;
+}
+.btn-info {
+    background: linear-gradient(135deg, #667eea, #764ba2); color: #fff;
+}
+.btn-success {
+    background: linear-gradient(135deg, #56ab2f, #a8e063); color: #fff;
+}
+.btn-danger {
+    background: linear-gradient(135deg, #e17055, #d63031); color: #fff;
+}
+
+/* Status display */
+.status-card {
+    position: absolute; top: 100px; left: 40px;
+    background: rgba(255,255,255,0.12); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 16px;
+    padding: 20px 28px; color: #fff; pointer-events: auto;
+    min-width: 240px; transition: all 0.4s;
+}
+.status-card h4 { font-size: 14px; color: #8ecae6; margin-bottom: 12px; letter-spacing: 2px; }
+.status-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 15px; }
+.status-item:last-child { margin-bottom: 0; }
+.status-item .label { color: rgba(255,255,255,0.6); }
+.status-item .value { font-weight: bold; color: #4ecdc4; }
+
+/* Hint text */
+.hint-text {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.7); color: #fff; padding: 16px 40px;
+    border-radius: 30px; font-size: 20px; letter-spacing: 3px;
+    opacity: 0; transition: opacity 0.5s; pointer-events: none;
+    text-align: center; white-space: nowrap;
+}
+.hint-text.show { opacity: 1; }
+
+/* Result modal */
+.result-modal {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8);
+    background: linear-gradient(145deg, #1a1a2e, #16213e);
+    border: 2px solid #4ecdc4; border-radius: 24px;
+    padding: 40px 60px; text-align: center; color: #fff;
+    opacity: 0; pointer-events: none; transition: all 0.5s;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.result-modal.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+.result-modal h2 { font-size: 32px; margin-bottom: 16px; color: #4ecdc4; letter-spacing: 4px; }
+.result-modal p { font-size: 20px; margin-bottom: 8px; color: #fff; }
+.result-modal .elephant-weight { font-size: 48px; color: #ffd700; font-weight: bold; margin: 20px 0; }
+.result-modal .star { font-size: 24px; margin: 12px 0; }
+.result-modal .restart-btn {
+    margin-top: 20px; padding: 12px 36px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #4ecdc4, #44b3aa); color: #fff;
+    font-size: 16px; font-weight: bold; cursor: pointer; letter-spacing: 2px;
+    font-family: inherit; transition: all 0.3s;
+}
+.result-modal .restart-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(78,205,196,0.5); }
+
+/* Loading screen */
+.loading-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #1a1a2e; display: flex; align-items: center; justify-content: center;
+    z-index: 100; transition: opacity 0.8s;
+}
+.loading-screen.hidden { opacity: 0; pointer-events: none; }
+.loading-screen .loader {
+    width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.1);
+    border-top-color: #4ecdc4; border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+.loading-screen .loading-text {
+    position: absolute; bottom: 40%; color: #4ecdc4; font-size: 18px;
+    letter-spacing: 4px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Stone weight display */
+.stone-counter {
+    position: absolute; top: 100px; right: 40px;
+    background: rgba(255,255,255,0.12); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 16px;
+    padding: 20px 28px; color: #fff; pointer-events: auto;
+    min-width: 200px; display: none;
+}
+.stone-counter.show { display: block; }
+.stone-counter h4 { font-size: 14px; color: #ffa07a; margin-bottom: 12px; letter-spacing: 2px; }
+.stone-counter .total-weight { font-size: 36px; font-weight: bold; color: #ffd700; }
+.stone-counter .unit { font-size: 16px; color: rgba(255,255,255,0.5); }
+.stone-counter .stone-count { font-size: 14px; color: rgba(255,255,255,0.6); margin-top: 8px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .top-bar { padding: 12px 16px; }
+    .title-text { font-size: 18px; }
+    .title-text span { display: none; }
+    .step-dot { width: 28px; height: 28px; font-size: 12px; }
+    .step-line { width: 12px; }
+    .status-card { left: 12px; top: 70px; padding: 12px 16px; min-width: 180px; }
+    .stone-counter { right: 12px; top: 70px; padding: 12px 16px; min-width: 160px; }
+    .bottom-panel { padding: 16px 12px 24px; gap: 8px; }
+    .action-btn { padding: 10px 20px; font-size: 14px; letter-spacing: 1px; }
+}
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div class="loading-screen" id="loadingScreen">
+    <div class="loader"></div>
+    <div class="loading-text">载入中...</div>
+</div>
+
+<div class="ui-overlay">
+    <!-- Top bar -->
+    <div class="top-bar">
+        <div class="title-text">曹冲称象<span>· 3D互动小游戏</span></div>
+        <div class="step-indicator">
+            <div class="step-dot active" id="dot1">1</div>
+            <div class="step-line" id="line1"></div>
+            <div class="step-dot" id="dot2">2</div>
+            <div class="step-line" id="line2"></div>
+            <div class="step-dot" id="dot3">3</div>
+            <div class="step-line" id="line3"></div>
+            <div class="step-dot" id="dot4">4</div>
+        </div>
+    </div>
+
+    <!-- Status card -->
+    <div class="status-card" id="statusCard">
+        <h4>当前状态</h4>
+        <div class="status-item"><span class="label">步骤</span><span class="value" id="stepText">请把大象牵上船</span></div>
+        <div class="status-item"><span class="label">水面线</span><span class="value" id="waterlineText">—</span></div>
+        <div class="status-item"><span class="label">船的吃水</span><span class="value" id="draftText">0.0</span></div>
+    </div>
+
+    <!-- Stone counter -->
+    <div class="stone-counter" id="stoneCounter">
+        <h4>石头称重</h4>
+        <span class="total-weight" id="totalWeight">0</span><span class="unit"> 斤</span>
+        <div class="stone-count" id="stoneCount">已放 0 块石头</div>
+    </div>
+
+    <!-- Hint text -->
+    <div class="hint-text" id="hintText"></div>
+
+    <!-- Result modal -->
+    <div class="result-modal" id="resultModal">
+        <h2>称重成功！</h2>
+        <p>大象的重量约为</p>
+        <div class="elephant-weight" id="elephantWeight">0 斤</div>
+        <div class="star" id="starText">★★★</div>
+        <p style="font-size:16px;color:rgba(255,255,255,0.6)">曹冲的方法真聪明！</p>
+        <button class="restart-btn" onclick="resetGame()">再玩一次</button>
+    </div>
+
+    <!-- Bottom panel -->
+    <div class="bottom-panel" id="bottomPanel">
+        <button class="action-btn btn-primary" id="btnElephant" onclick="loadElephant()">🐘 牵大象上船</button>
+        <button class="action-btn btn-info" id="btnMark" onclick="markWaterline()" disabled>📏 刻下水面线</button>
+        <button class="action-btn btn-warning" id="btnElephantOff" onclick="removeElephant()" disabled>🐘 牵大象下船</button>
+        <button class="action-btn btn-success" id="btnAddStone" onclick="addStone()" disabled>🪨 添加石头</button>
+        <button class="action-btn btn-danger" id="btnWeigh" onclick="weighStones()" disabled>⚖️ 称量石头</button>
+    </div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ====== Scene setup ======
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x88ccee, 30, 80);
+scene.background = new THREE.Color(0x88ccee);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(18, 14, 22);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+container.appendChild(renderer.domElement);
+
+// Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 12;
+controls.maxDistance = 40;
+controls.maxPolarAngle = Math.PI / 2.1;
+controls.target.set(0, 1, 0);
+
+// ====== Lighting ======
+const ambientLight = new THREE.AmbientLight(0xaabbff, 0.6);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffee, 1.0);
+dirLight.position.set(15, 25, 10);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.camera.left = -25;
+dirLight.shadow.camera.right = 25;
+dirLight.shadow.camera.top = 25;
+dirLight.shadow.camera.bottom = -25;
+dirLight.shadow.bias = -0.0005;
+scene.add(dirLight);
+
+const hemiLight = new THREE.HemisphereLight(0x88aaff, 0x6699aa, 0.4);
+scene.add(hemiLight);
+
+// ====== Water surface ======
+const waterGroup = new THREE.Group();
+
+// Main water plane
+const waterGeo = new THREE.PlaneGeometry(100, 100, 64, 64);
+const waterMat = new THREE.MeshPhongMaterial({
+    color: 0x4488cc,
+    transparent: true,
+    opacity: 0.75,
+    shininess: 80,
+    specular: 0xffffff,
+    side: THREE.DoubleSide
+});
+const water = new THREE.Mesh(waterGeo, waterMat);
+water.rotation.x = -Math.PI / 2;
+water.position.y = 0;
+water.receiveShadow = true;
+waterGroup.add(water);
+scene.add(waterGroup);
+
+// Water animation vertices
+const waterPositions = waterGeo.attributes.position.clone();
+const waterOriginal = waterGeo.attributes.position.clone();
+
+// ====== Boat ======
+const boatGroup = new THREE.Group();
+
+// Hull - built from a lathe-like shape using extrude
+function createBoat() {
+    const hullGroup = new THREE.Group();
+
+    // Bottom hull (half egg shape)
+    const hullShape = new THREE.Shape();
+    hullShape.moveTo(0, 0);
+    hullShape.quadraticCurveTo(2, 0, 3.5, 0.6);
+    hullShape.quadraticCurveTo(4, 1.5, 3.2, 2.2);
+    hullShape.quadraticCurveTo(1.5, 2.6, 0, 2.6);
+    hullShape.quadraticCurveTo(-1.5, 2.6, -3.2, 2.2);
+    hullShape.quadraticCurveTo(-4, 1.5, -3.5, 0.6);
+    hullShape.quadraticCurveTo(-2, 0, 0, 0);
+
+    const extrudeSettings = {
+        depth: 8,
+        bevelEnabled: true,
+        bevelThickness: 0.2,
+        bevelSize: 0.2,
+        bevelSegments: 3,
+        steps: 1
+    };
+    const hullGeo = new THREE.ExtrudeGeometry(hullShape, extrudeSettings);
+    hullGeo.translate(0, 0, -4);
+    const hullMat = new THREE.MeshPhongMaterial({ color: 0x8B4513, shininess: 30 });
+    const hull = new THREE.Mesh(hullGeo, hullMat);
+    hull.castShadow = true;
+    hull.receiveShadow = true;
+    hullGroup.add(hull);
+
+    // Inner deck (darker)
+    const deckShape = new THREE.Shape();
+    deckShape.moveTo(0, 0.3);
+    deckShape.quadraticCurveTo(1.5, 0.3, 2.8, 0.8);
+    deckShape.quadraticCurveTo(3.2, 1.5, 2.6, 1.8);
+    deckShape.quadraticCurveTo(1.3, 2.0, 0, 2.0);
+    deckShape.quadraticCurveTo(-1.3, 2.0, -2.6, 1.8);
+    deckShape.quadraticCurveTo(-3.2, 1.5, -2.8, 0.8);
+    deckShape.quadraticCurveTo(-1.5, 0.3, 0, 0.3);
+    const deckGeo = new THREE.ExtrudeGeometry(deckShape, {
+        depth: 7.5, bevelEnabled: false, steps: 1
+    });
+    deckGeo.translate(0, 0, -3.75);
+    const deckMat = new THREE.MeshPhongMaterial({ color: 0xD2691E, shininess: 20 });
+    const deck = new THREE.Mesh(deckGeo, deckMat);
+    deck.position.y = 0.15;
+    hullGroup.add(deck);
+
+    // Mast
+    const mastGeo = new THREE.CylinderGeometry(0.15, 0.18, 5, 12);
+    const mastMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+    const mast = new THREE.Mesh(mastGeo, mastMat);
+    mast.position.set(0, 5.5, 0);
+    mast.castShadow = true;
+    hullGroup.add(mast);
+
+    // Sail
+    const sailGeo = new THREE.PlaneGeometry(2.5, 3);
+    const sailMat = new THREE.MeshPhongMaterial({
+        color: 0xf5f0e0, side: THREE.DoubleSide, shininess: 0
+    });
+    const sail = new THREE.Mesh(sailGeo, sailMat);
+    sail.position.set(1.2, 6, 0);
+    sail.castShadow = true;
+    hullGroup.add(sail);
+
+    // Flag on top
+    const flagGeo = new THREE.PlaneGeometry(0.8, 0.5);
+    const flagMat = new THREE.MeshPhongMaterial({
+        color: 0xff4444, side: THREE.DoubleSide
+    });
+    const flag = new THREE.Mesh(flagGeo, flagMat);
+    flag.position.set(0.4, 8.5, 0);
+    hullGroup.add(flag);
+
+    return hullGroup;
+}
+
+const boat = createBoat();
+boat.position.y = 0;
+scene.add(boat);
+
+// ====== Elephant (cute low-poly) ======
+function createElephant() {
+    const group = new THREE.Group();
+
+    // Body
+    const bodyMat = new THREE.MeshPhongMaterial({ color: 0xA0B0C8, shininess: 10 });
+    const bodyGeo = new THREE.SphereGeometry(1.2, 16, 12);
+    bodyGeo.scale(1.5, 0.9, 1);
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 1.5;
+    body.castShadow = true;
+    group.add(body);
+
+    // Head
+    const headGeo = new THREE.SphereGeometry(0.9, 16, 12);
+    const head = new THREE.Mesh(headGeo, bodyMat);
+    head.position.set(1.3, 1.6, 0);
+    head.castShadow = true;
+    group.add(head);
+
+    // Ears
+    const earGeo = new THREE.SphereGeometry(0.5, 12, 8);
+    earGeo.scale(0.2, 1, 0.8);
+    const leftEar = new THREE.Mesh(earGeo, bodyMat);
+    leftEar.position.set(1.2, 1.9, 0.7);
+    leftEar.castShadow = true;
+    group.add(leftEar);
+    const rightEar = leftEar.clone();
+    rightEar.position.z = -0.7;
+    group.add(rightEar);
+
+    // Trunk
+    const trunkSegments = [];
+    const trunkMat = bodyMat;
+    for (let i = 0; i < 5; i++) {
+        const seg = new THREE.Mesh(
+            new THREE.SphereGeometry(0.28 - i * 0.03, 8, 8),
+            trunkMat
+        );
+        seg.position.set(2.0 + i * 0.25, 1.4 - i * 0.2, 0);
+        seg.castShadow = true;
+        group.add(seg);
+        trunkSegments.push(seg);
+    }
+    group.userData.trunk = trunkSegments;
+
+    // Tusks
+    const tuskMat = new THREE.MeshPhongMaterial({ color: 0xfffff0, shininess: 60 });
+    const tuskGeo = new THREE.ConeGeometry(0.08, 0.5, 8);
+    const leftTusk = new THREE.Mesh(tuskGeo, tuskMat);
+    leftTusk.position.set(1.7, 1.3, 0.3);
+    leftTusk.rotation.z = -Math.PI / 3;
+    group.add(leftTusk);
+    const rightTusk = leftTusk.clone();
+    rightTusk.position.z = -0.3;
+    group.add(rightTusk);
+
+    // Eyes
+    const eyeMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+    const eyeGeo = new THREE.SphereGeometry(0.1, 8, 8);
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(1.85, 1.9, 0.35);
+    group.add(leftEye);
+    const rightEye = leftEye.clone();
+    rightEye.position.z = -0.35;
+    group.add(rightEye);
+
+    // Legs
+    const legGeo = new THREE.CylinderGeometry(0.35, 0.3, 1, 12);
+    const legMat = bodyMat;
+    const legPositions = [
+        [0.8, 0.5, 0.5], [0.8, 0.5, -0.5],
+        [-0.5, 0.5, 0.5], [-0.5, 0.5, -0.5]
+    ];
+    legPositions.forEach(pos => {
+        const leg = new THREE.Mesh(legGeo, legMat);
+        leg.position.set(...pos);
+        leg.castShadow = true;
+        group.add(leg);
+    });
+
+    // Tail
+    const tailGeo = new THREE.CylinderGeometry(0.05, 0.08, 0.6, 8);
+    const tail = new THREE.Mesh(tailGeo, bodyMat);
+    tail.position.set(-1.8, 1.4, 0);
+    tail.rotation.z = Math.PI / 2.5;
+    group.add(tail);
+
+    group.scale.set(0.7, 0.7, 0.7);
+    return group;
+}
+
+const elephant = createElephant();
+elephant.position.set(10, 0, 0);
+elephant.visible = false;
+scene.add(elephant);
+
+// ====== Stones ======
+const stoneGroup = new THREE.Group();
+scene.add(stoneGroup);
+
+const stonesOnBoat = [];
+const stonesOnShore = [];
+
+function createStone(size = 0.5, color = null) {
+    const colors = [0x887755, 0x998866, 0x776644, 0x665533, 0xaa9977];
+    const c = color || colors[Math.floor(Math.random() * colors.length)];
+    const mat = new THREE.MeshPhongMaterial({ color: c, shininess: 5, flatShading: true });
+    const geo = new THREE.DodecahedronGeometry(size, 0);
+    const stone = new THREE.Mesh(geo, mat);
+    stone.castShadow = true;
+    stone.receiveShadow = true;
+    // Random rotation for natural look
+    stone.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    return stone;
+}
+
+// Pre-generate shore stones
+for (let i = 0; i < 30; i++) {
+    const size = 0.3 + Math.random() * 0.25;
+    const stone = createStone(size);
+    stone.position.set(
+        -8 - Math.random() * 4,
+        0,
+        -4 + i * 0.4 + (Math.random() - 0.5)
+    );
+    stone.userData.weight = Math.floor(50 + Math.random() * 200);
+    stone.userData.size = size;
+    stone.userData.shorePos = stone.position.clone();
+    stone.userData.index = i;
+    stonesOnShore.push(stone);
+    scene.add(stone);
+}
+
+// ====== Waterline marker (red line on boat) ======
+let waterlineMarker = null;
+
+function createWaterlineMarker() {
+    const markerGroup = new THREE.Group();
+    const markerMat = new THREE.MeshPhongMaterial({ color: 0xff3333, emissive: 0x881111 });
+
+    // Red band around boat
+    const ringGeo = new THREE.TorusGeometry(3.8, 0.08, 8, 32);
+    const ring = new THREE.Mesh(ringGeo, markerMat);
+    ring.rotation.x = Math.PI / 2;
+    markerGroup.add(ring);
+
+    return markerGroup;
+}
+
+// ====== River banks / environment ======
+function createEnvironment() {
+    // Left bank
+    const bankGeo = new THREE.BoxGeometry(8, 3, 30);
+    const bankMat = new THREE.MeshPhongMaterial({ color: 0x7CB342, shininess: 0 });
+    const leftBank = new THREE.Mesh(bankGeo, bankMat);
+    leftBank.position.set(-18, 1.5, 0);
+    leftBank.receiveShadow = true;
+    scene.add(leftBank);
+
+    const rightBank = leftBank.clone();
+    rightBank.position.x = 18;
+    scene.add(rightBank);
+
+    // Decorative trees
+    for (let i = 0; i < 8; i++) {
+        const tree = createTree();
+        tree.position.set(
+            -14 + Math.random() * 4,
+            3,
+            -12 + i * 4 + (Math.random() - 0.5) * 2
+        );
+        scene.add(tree);
+
+        const tree2 = createTree();
+        tree2.position.set(
+            14 + Math.random() * 4,
+            3,
+            -12 + i * 4 + (Math.random() - 0.5) * 2
+        );
+        scene.add(tree2);
+    }
+
+    // Distant mountains
+    for (let i = 0; i < 5; i++) {
+        const mountain = new THREE.Mesh(
+            new THREE.ConeGeometry(6 + Math.random() * 4, 8 + Math.random() * 4, 4),
+            new THREE.MeshPhongMaterial({ color: 0x6688aa, flatShading: true, shininess: 0 })
+        );
+        mountain.position.set(-30 + i * 15, 4, -35);
+        scene.add(mountain);
+    }
+
+    // Sun / clouds
+    const cloudMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+    for (let i = 0; i < 6; i++) {
+        const cloud = new THREE.Group();
+        for (let j = 0; j < 3; j++) {
+            const puff = new THREE.Mesh(
+                new THREE.SphereGeometry(1 + Math.random() * 0.5, 8, 6),
+                cloudMat
+            );
+            puff.position.set(j * 1.2, Math.random() * 0.3, 0);
+            cloud.add(puff);
+        }
+        cloud.position.set(
+            -20 + Math.random() * 40,
+            15 + Math.random() * 5,
+            -20 + Math.random() * 15
+        );
+        cloud.userData.speed = 0.005 + Math.random() * 0.01;
+        scene.add(cloud);
+    }
+}
+
+function createTree() {
+    const tree = new THREE.Group();
+    const trunkMat = new THREE.MeshPhongMaterial({ color: 0x6B4226 });
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 2, 8), trunkMat);
+    trunk.position.y = 0;
+    trunk.castShadow = true;
+    tree.add(trunk);
+
+    const leafMat = new THREE.MeshPhongMaterial({ color: 0x4CAF50, flatShading: true });
+    const leaf1 = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), leafMat);
+    leaf1.position.y = 1.2;
+    leaf1.castShadow = true;
+    tree.add(leaf1);
+
+    const leaf2 = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 6), leafMat);
+    leaf2.position.y = 2;
+    leaf2.castShadow = true;
+    tree.add(leaf2);
+
+    return tree;
+}
+
+createEnvironment();
+
+// ====== Game state ======
+let gameStep = 1; // 1: load elephant, 2: mark, 3: elephant off, 4: add stones & weigh
+let elephantOnBoat = false;
+let waterlineMarked = false;
+let elephantRemoved = false;
+let stonesAdded = 0;
+let totalStoneWeight = 0;
+let targetWaterline = 0;
+let boatBaseY = 0;
+let boatTargetY = 0;
+
+// Weights
+const ELEPHANT_WEIGHT = 3500; // 斤
+const STONES_PER_CLICK = 1;
+
+// ====== Game logic ======
+window.loadElephant = function() {
+    if (gameStep !== 1) return;
+
+    // Animate elephant walking onto boat
+    elephant.visible = true;
+    elephant.position.set(10, 0, 0);
+
+    const start = { x: 10, y: 0 };
+    const end = { x: 0, y: 2.8 };
+    const duration = 2000;
+    const startTime = performance.now();
+
+    function animateOn() {
+        const elapsed = performance.now() - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        const easeT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+        elephant.position.x = start.x + (end.x - start.x) * easeT;
+        elephant.position.y = start.y + (end.y - start.y) * easeT + Math.sin(easeT * Math.PI) * 0.3;
+
+        if (t < 1) {
+            requestAnimationFrame(animateOn);
+        } else {
+            elephantOnBoat = true;
+            boatTargetY = -1.2; // Boat sinks
+            gameStep = 2;
+            updateUI();
+            showHint('大象已上船！现在请刻下水面线', 2500);
+        }
+    }
+    animateOn();
+};
+
+window.markWaterline = function() {
+    if (gameStep !== 2) return;
+
+    waterlineMarker = createWaterlineMarker();
+    waterlineMarker.position.y = 1.2; // On the boat at waterline level
+    boat.add(waterlineMarker);
+
+    targetWaterline = boat.position.y - 1.2; // Target Y for boat
+    waterlineMarked = true;
+    gameStep = 3;
+
+    updateUI();
+    showHint('水面线已刻下！现在请把大象牵下船', 2500);
+};
+
+window.removeElephant = function() {
+    if (gameStep !== 3) return;
+
+    const start = { x: 0, y: 2.8 };
+    const end = { x: 10, y: 0 };
+    const duration = 2000;
+    const startTime = performance.now();
+
+    function animateOff() {
+        const elapsed = performance.now() - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        const easeT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+        elephant.position.x = start.x + (end.x - start.x) * easeT;
+        elephant.position.y = start.y + (end.y - start.y) * easeT + Math.sin(easeT * Math.PI) * 0.3;
+
+        if (t < 1) {
+            requestAnimationFrame(animateOff);
+        } else {
+            elephantOnBoat = false;
+            elephant.visible = false;
+            elephantRemoved = true;
+            boatTargetY = 0; // Boat rises back
+            gameStep = 4;
+            updateUI();
+            showHint('大象已下船！现在开始往船上添加石头', 2500);
+        }
+    }
+    animateOff();
+};
+
+window.addStone = function() {
+    if (gameStep !== 4) return;
+    if (stonesAdded >= stonesOnShore.length) {
+        showHint('石头已经用完了！', 2000);
+        return;
+    }
+
+    const stone = stonesOnShore[stonesAdded];
+    const weight = stone.userData.weight;
+
+    // Animate stone flying to boat
+    const startPos = stone.position.clone();
+    const targetPos = new THREE.Vector3(
+        (Math.random() - 0.5) * 4,
+        2.5 + stonesAdded * 0.3,
+        (Math.random() - 0.5) * 5
+    );
+    const duration = 800;
+    const startTime = performance.now();
+
+    // Remove from shore, add to boat
+    scene.remove(stone);
+    boat.add(stone);
+    stone.position.copy(startPos.clone().sub(boat.position));
+
+    const localStart = stone.position.clone();
+    const localTarget = targetPos.clone().sub(boat.position);
+
+    function animateStone() {
+        const elapsed = performance.now() - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        const easeT = 1 - Math.pow(1 - t, 3);
+
+        stone.position.lerpVectors(localStart, localTarget, easeT);
+        stone.position.y += Math.sin(easeT * Math.PI) * 3; // Arc
+
+        if (t < 1) {
+            requestAnimationFrame(animateStone);
+        } else {
+            stonesOnBoat.push(stone);
+            stonesAdded++;
+            totalStoneWeight += weight;
+
+            // Check if boat reached target waterline
+            const currentDraft = totalStoneWeight / ELEPHANT_WEIGHT * 1.2;
+            boatTargetY = -Math.min(currentDraft, 1.2);
+
+            updateUI();
+
+            if (totalStoneWeight >= ELEPHANT_WEIGHT) {
+                showHint('水面线已对齐！可以称量了', 2000);
+                boatTargetY = -1.2;
+            }
+        }
+    }
+    animateStone();
+};
+
+window.weighStones = function() {
+    if (gameStep !== 4) return;
+    if (totalStoneWeight === 0) {
+        showHint('还没有放石头呢！', 2000);
+        return;
+    }
+
+    // Show result
+    const modal = document.getElementById('resultModal');
+    const weightEl = document.getElementById('elephantWeight');
+    const starEl = document.getElementById('starText');
+
+    const diff = Math.abs(totalStoneWeight - ELEPHANT_WEIGHT);
+    let stars = '★★★';
+    if (diff > 300) stars = '★★☆';
+    if (diff > 600) stars = '★☆☆';
+    if (diff > 1000) stars = '☆☆☆';
+
+    weightEl.textContent = totalStoneWeight + ' 斤';
+    starEl.textContent = stars;
+
+    modal.classList.add('show');
+};
+
+window.resetGame = function() {
+    // Reset state
+    gameStep = 1;
+    elephantOnBoat = false;
+    waterlineMarked = false;
+    elephantRemoved = false;
+    stonesAdded = 0;
+    totalStoneWeight = 0;
+    boatTargetY = 0;
+
+    // Remove waterline marker
+    if (waterlineMarker) {
+        boat.remove(waterlineMarker);
+        waterlineMarker = null;
+    }
+
+    // Remove stones from boat, put back on shore
+    stonesOnBoat.forEach(s => {
+        boat.remove(s);
+        s.position.copy(s.userData.shorePos);
+        scene.add(s);
+    });
+    stonesOnBoat.length = 0;
+
+    // Hide elephant
+    elephant.visible = false;
+    elephant.position.set(10, 0, 0);
+
+    // Hide modal
+    document.getElementById('resultModal').classList.remove('show');
+
+    updateUI();
+    showHint('重新开始！请把大象牵上船', 2000);
+};
+
+// ====== UI helpers ======
+function updateUI() {
+    const dots = ['dot1', 'dot2', 'dot3', 'dot4'];
+    const lines = ['line1', 'line2', 'line3'];
+
+    dots.forEach((id, i) => {
+        const dot = document.getElementById(id);
+        dot.classList.remove('active', 'done');
+        if (i < gameStep - 1) dot.classList.add('done');
+        if (i === gameStep - 1) dot.classList.add('active');
+    });
+    lines.forEach((id, i) => {
+        const line = document.getElementById(id);
+        line.classList.toggle('done', i < gameStep - 1);
+    });
+
+    // Button states
+    document.getElementById('btnElephant').disabled = gameStep !== 1;
+    document.getElementById('btnMark').disabled = gameStep !== 2;
+    document.getElementById('btnElephantOff').disabled = gameStep !== 3;
+    document.getElementById('btnAddStone').disabled = gameStep !== 4 || stonesAdded >= stonesOnShore.length;
+    document.getElementById('btnWeigh').disabled = gameStep !== 4 || totalStoneWeight === 0;
+
+    // Status card
+    const stepTexts = [
+        '请把大象牵上船',
+        '大象在船上啦，请刻下水面线',
+        '水面线已刻好，请把大象牵下船',
+        '往船上添加石头，直到水面线对齐'
+    ];
+    document.getElementById('stepText').textContent = stepTexts[gameStep - 1];
+    document.getElementById('waterlineText').textContent = waterlineMarked ? '已标记 ✓' : '未标记';
+    document.getElementById('draftText').textContent = (-boat.position.y).toFixed(1);
+
+    // Stone counter
+    const stoneCounter = document.getElementById('stoneCounter');
+    if (gameStep === 4) {
+        stoneCounter.classList.add('show');
+        document.getElementById('totalWeight').textContent = totalStoneWeight;
+        document.getElementById('stoneCount').textContent = `已放 ${stonesAdded} 块石头`;
+    } else {
+        stoneCounter.classList.remove('show');
+    }
+}
+
+function showHint(text, duration = 2000) {
+    const hint = document.getElementById('hintText');
+    hint.textContent = text;
+    hint.classList.add('show');
+    clearTimeout(hint._timer);
+    hint._timer = setTimeout(() => hint.classList.remove('show'), duration);
+}
+
+// ====== Animation loop ======
+let time = 0;
+function animate() {
+    requestAnimationFrame(animate);
+    time += 0.016;
+
+    // Water wave animation
+    const positions = waterGeo.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+        const x = waterOriginal.getX(i);
+        const y = waterOriginal.getY(i);
+        const wave = Math.sin(x * 0.3 + time * 1.5) * 0.12 + Math.cos(y * 0.3 + time * 1.2) * 0.12;
+        positions.setZ(i, wave);
+    }
+    positions.needsUpdate = true;
+    waterGeo.computeVertexNormals();
+
+    // Boat floating
+    boatBaseY += (boatTargetY - boatBaseY) * 0.05;
+    const bob = Math.sin(time * 1.2) * 0.08;
+    boat.position.y = boatBaseY + bob;
+    boat.rotation.z = Math.sin(time * 0.8) * 0.02;
+
+    // Elephant trunk animation
+    if (elephant.visible && elephant.userData.trunk) {
+        elephant.userData.trunk.forEach((seg, i) => {
+            const baseX = 2.0 + i * 0.25;
+            const baseY = 1.4 - i * 0.2;
+            seg.position.x = baseX + Math.sin(time * 2 + i * 0.5) * 0.08;
+            seg.position.y = baseY + Math.cos(time * 2 + i * 0.5) * 0.05;
+        });
+    }
+
+    // Elephant idle bob when on boat
+    if (elephantOnBoat && elephant.visible) {
+        elephant.position.y = 2.8 + Math.sin(time * 1.5) * 0.05;
+    }
+
+    // Clouds drift
+    scene.children.forEach(child => {
+        if (child.userData.speed && child.children.length > 0) {
+            child.position.x += child.userData.speed;
+            if (child.position.x > 25) child.position.x = -25;
+        }
+    });
+
+    // Update status
+    document.getElementById('draftText').textContent = (-boat.position.y).toFixed(1);
+
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+// ====== Resize ======
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ====== Start ======
+setTimeout(() => {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    showHint('欢迎来到曹冲称象！请把大象牵上船', 3500);
+    updateUI();
+}, 800);
+
+animate();
+</script>
+</body>
+</html>
