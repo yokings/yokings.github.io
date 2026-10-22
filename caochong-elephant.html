@@ -544,34 +544,75 @@ let waterlineMarker = null;
 
 function createWaterlineMarker() {
     const markerGroup = new THREE.Group();
-    const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const redMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-    // Red band around boat - thick and bright
-    const ringGeo = new THREE.TorusGeometry(3.8, 0.25, 12, 48);
-    const ring = new THREE.Mesh(ringGeo, markerMat);
-    ring.rotation.x = Math.PI / 2;
-    markerGroup.add(ring);
+    // Left side marker pole - sticks out from boat hull
+    const poleGeo = new THREE.CylinderGeometry(0.15, 0.15, 3, 8);
+    const leftPole = new THREE.Mesh(poleGeo, whiteMat);
+    leftPole.position.set(-4.5, 1.2, 0);
+    markerGroup.add(leftPole);
 
-    // Second ring slightly above for visibility
-    const ring2 = new THREE.Mesh(ringGeo.clone(), markerMat);
-    ring2.rotation.x = Math.PI / 2;
-    ring2.position.y = 0.3;
-    markerGroup.add(ring2);
+    // Red cap on top of left pole
+    const leftCap = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), redMat);
+    leftCap.position.set(-4.5, 2.7, 0);
+    markerGroup.add(leftCap);
 
-    // Glowing sphere markers at front and back for extra visibility
-    const dotGeo = new THREE.SphereGeometry(0.4, 16, 16);
-    const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const dot1 = new THREE.Mesh(dotGeo, dotMat);
-    dot1.position.set(0, 0, 4.2);
-    markerGroup.add(dot1);
-    const dot2 = new THREE.Mesh(dotGeo, dotMat);
-    dot2.position.set(0, 0, -4.2);
-    markerGroup.add(dot2);
+    // Red band on left pole at waterline
+    const leftBand = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.22, 0.5, 12),
+        redMat
+    );
+    leftBand.position.set(-4.5, 1.2, 0);
+    markerGroup.add(leftBand);
 
-    // Add a point light to make it glow
-    const glow = new THREE.PointLight(0xff0000, 2, 10);
-    glow.position.set(0, 0.5, 0);
-    markerGroup.add(glow);
+    // Right side marker pole
+    const rightPole = new THREE.Mesh(poleGeo, whiteMat);
+    rightPole.position.set(4.5, 1.2, 0);
+    markerGroup.add(rightPole);
+
+    const rightCap = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), redMat);
+    rightCap.position.set(4.5, 2.7, 0);
+    markerGroup.add(rightCap);
+
+    const rightBand = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.22, 0.5, 12),
+        redMat
+    );
+    rightBand.position.set(4.5, 1.2, 0);
+    markerGroup.add(rightBand);
+
+    // Front and back markers
+    const frontPole = new THREE.Mesh(poleGeo, whiteMat);
+    frontPole.position.set(0, 1.2, 5);
+    markerGroup.add(frontPole);
+    const frontCap = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), redMat);
+    frontCap.position.set(0, 2.7, 5);
+    markerGroup.add(frontCap);
+    const frontBand = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.22, 0.5, 12),
+        redMat
+    );
+    frontBand.position.set(0, 1.2, 5);
+    markerGroup.add(frontBand);
+
+    const backPole = new THREE.Mesh(poleGeo, whiteMat);
+    backPole.position.set(0, 1.2, -5);
+    markerGroup.add(backPole);
+    const backCap = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), redMat);
+    backCap.position.set(0, 2.7, -5);
+    markerGroup.add(backCap);
+    const backBand = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.22, 0.5, 12),
+        redMat
+    );
+    backBand.position.set(0, 1.2, -5);
+    markerGroup.add(backBand);
+
+    // Red glowing point lights
+    const glow1 = new THREE.PointLight(0xff0000, 1.5, 8);
+    glow1.position.set(0, 1.2, 0);
+    markerGroup.add(glow1);
 
     return markerGroup;
 }
