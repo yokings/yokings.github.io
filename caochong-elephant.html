@@ -544,13 +544,34 @@ let waterlineMarker = null;
 
 function createWaterlineMarker() {
     const markerGroup = new THREE.Group();
-    const markerMat = new THREE.MeshPhongMaterial({ color: 0xff3333, emissive: 0x881111 });
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
-    // Red band around boat
-    const ringGeo = new THREE.TorusGeometry(3.8, 0.08, 8, 32);
+    // Red band around boat - thick and bright
+    const ringGeo = new THREE.TorusGeometry(3.8, 0.25, 12, 48);
     const ring = new THREE.Mesh(ringGeo, markerMat);
     ring.rotation.x = Math.PI / 2;
     markerGroup.add(ring);
+
+    // Second ring slightly above for visibility
+    const ring2 = new THREE.Mesh(ringGeo.clone(), markerMat);
+    ring2.rotation.x = Math.PI / 2;
+    ring2.position.y = 0.3;
+    markerGroup.add(ring2);
+
+    // Glowing sphere markers at front and back for extra visibility
+    const dotGeo = new THREE.SphereGeometry(0.4, 16, 16);
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const dot1 = new THREE.Mesh(dotGeo, dotMat);
+    dot1.position.set(0, 0, 4.2);
+    markerGroup.add(dot1);
+    const dot2 = new THREE.Mesh(dotGeo, dotMat);
+    dot2.position.set(0, 0, -4.2);
+    markerGroup.add(dot2);
+
+    // Add a point light to make it glow
+    const glow = new THREE.PointLight(0xff0000, 2, 10);
+    glow.position.set(0, 0.5, 0);
+    markerGroup.add(glow);
 
     return markerGroup;
 }
